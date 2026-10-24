@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8"><title>I Wanted One Inbox. So I Built an Email Client.</title></head><body><h1>I Wanted One Inbox. So I Built an Email Client.</h1>
+<p><em>A local-first, open source email client for the Resend accounts behind my projects.</em></p>
+<p>I wanted a separate email address for each project. SlayFit should have its own inbox. Review Assist should have its own inbox. Neither needed to disappear into my personal Gmail.</p>
+<p>Sending was already available through Resend. Receiving was possible too. The missing piece was the place where I could sit down, read the mail, and reply from the right address without checking several dashboards.</p>
+<p>That small gap became Project Inbox, an open source email client that runs locally and combines multiple Resend accounts in one browser interface. I built it with help from AI coding agents, including a separate agent for the client design.</p>
+<h2>The first plan was bigger than the problem</h2>
+<p>Our first sketch had a public webhook endpoint on Cloudflare, a database, and a desktop app. Resend would notify the server about incoming mail. The server would store it. The desktop app would connect to that server.</p>
+<p>That is a reasonable design for a service that must collect events continuously or support several people across devices. We also considered Google sign-in and a hosted version.</p>
+<p>Then I asked a simpler question: if Resend already stores received messages and exposes a listing API, why should my first version depend on a second always-available service?</p>
+<p>Resend documents listing received emails with pagination, which makes polling and backfilling possible without a webhook. That changed the architecture.</p>
+<h2>A local client was enough for the first version</h2>
+<p>Project Inbox starts a small Node process bound to the loopback address on my computer. It serves the browser interface, calls Resend, and uses SQLite for local persistence.</p>
+<p>Opening the client triggers synchronization. While the page is active, it checks periodically for new mail. If the app is closed, messages continue arriving at Resend. The next sync can retrieve the messages the provider still retains.</p>
+<p>The browser is the interface. The local Node process is the bridge to Resend. This avoids depending on direct browser access to the provider API and gives us one place to handle credentials, request limits, and persistence.</p>
+<p>There is no hosted account to create and no public endpoint to expose. The first screen asks for a project name, mailbox address, and Resend key. Add another account and it joins the same unified inbox.</p>
+<h2>Entering a key once should actually mean once</h2>
+<p>I did not want to paste an API key every time I opened the app. Connected accounts therefore live in the local SQLite database. The application encrypts their API keys using AES-GCM and generates a separate encryption key on the same computer.</p>
+<p>The settings screen never receives saved API keys back from the server. It can update a key or keep the existing one. Restarting the app does not discard the accounts.</p>
+<p>This is a specific protection with a specific limit: a copied database does not expose those keys without the encryption key. Someone who controls the computer and can read both files is outside that protection. Cached email content is not encrypted by the app itself.</p>
+<p>For a local tool, that boundary is more useful to explain clearly than a vague promise that everything is secure.</p>
+<h2>The small details are still email-client work</h2>
+<p>A unified inbox needs more than a list API. Messages need read state, an archive, account filters, a reader, and a way to reply through the account that received the conversation.</p>
+<p>The first version includes those pieces, plus a composer with font choices, sizes, emphasis, lists, and links. Outgoing messages carry plain text and sanitized HTML. Incoming HTML is isolated, with scripts and remote content blocked.</p>
+<p>Sync imports bounded pages and persists its progress, so an interrupted history import can continue later. Full bodies are loaded when a message is opened. Provider requests are spaced out rather than firing every account at once.</p>
+<p>Sending uses a persistent request identifier and Resend's idempotency mechanism. That matters when a request succeeds at the provider but the browser loses the response. Retrying should not casually send another copy.</p>
+<h2>A domain still needs somewhere to receive mail</h2>
+<p>Building the client did not remove the DNS work. SlayFit initially forwarded incoming mail through Cloudflare to Gmail. That arrangement could verify an address, but it would not put incoming messages into the Resend account the client reads.</p>
+<p>We switched the incoming route to the receiving record supplied by Resend. Outgoing domain verification and incoming mail routing are separate checks. A working send test does not establish that receiving works.</p>
+<p>The first live outgoing test reached its destination. Receiving configuration was subsequently verified by Resend; a full incoming-message test remains part of the rollout.</p>
+<h2>Keep the first release small enough to use</h2>
+<p>The code separates routing, synchronization, sending, formatting, credential handling, and storage. The client uses ordinary HTML, CSS, and JavaScript. There is no frontend framework build step and no Docker requirement.</p>
+<p>The package is designed to start with one npm command. The public GitHub source can be used independently of an npm registry release, and the repository includes CI checks and a publishing workflow.</p>
+<p>It is deliberately an early Resend client. Outgoing attachments, calendar features, mobile synchronization, and notifications while everything is closed are not part of this release.</p>
+<p>My next step is to use it with my own projects for a few days. That should tell me more than adding hosted sign-in before the local workflow has settled.</p>
+<p>If you also have several project addresses on Resend and want one place to manage them, the source and setup instructions are available in the Project Inbox repository. The useful question for this first version is whether it makes that daily task easier.</p>
+<p><a href="https://github.com/uditk2/project-inbox">Project Inbox source and setup</a> · <a href="https://resend.com/docs/api-reference/emails/list-received-emails">Resend received-mail API</a></p></body></html>
