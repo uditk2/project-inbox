@@ -3,6 +3,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      verify_only:
+        description: Verify an existing release without publishing again
+        type: boolean
+        default: false
 permissions:
   contents: read
   id-token: write
@@ -42,15 +47,5 @@ jobs:
       - run: npm test
       - run: npm audit --omit=dev --audit-level=high
       - run: npm pack --dry-run
-      - name: Publish with npm trusted publishing
-        run: npm publish --access public --provenance
-      - name: Verify published version
-        run: |
-          node --input-type=module -e '
-            import fs from "node:fs";
-            import { execFileSync } from "node:child_process";
-            const { name, version } = JSON.parse(fs.readFileSync("package.json", "utf8"));
-            const published = JSON.parse(execFileSync("npm", ["view", `${name}@${version}`, "version", "dist.tarball", "--json"], { encoding: "utf8" }));
-            if (published.version !== version || !published["dist.tarball"]) throw new Error("Registry verification failed");
-            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Published **${name}@${version}**: ${published["dist.tarball"]}\n`);
-          '
+      - name: Publish and verify npm release
+        run: node ../../scripts/publish-release.mjs ${{ inputs.verify_only && '--verify-only' || '' }}
