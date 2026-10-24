@@ -19,6 +19,9 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix packages/mcp
+      - run: npm run check --prefix packages/mcp
+      - run: npm audit --prefix packages/mcp --omit=dev --audit-level=high
       - run: npm run check
       - run: npm test
       - run: npm audit --omit=dev --audit-level=high

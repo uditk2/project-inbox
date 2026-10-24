@@ -1,5 +1,6 @@
 import { send } from './send.js';
 import { syncAccount } from './sync.js';
+import { drafts } from './drafts.js';
 import { localRequest, HttpError, normalizeReceived, normalizeSent, publicAccount, resend, loadAccounts, encryptCredentials, validEmail } from './core.js';
 
 const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -10,6 +11,10 @@ async function api(request, env, user) {
   const configured = await loadAccounts(env);
   if (url.pathname === '/api/session' && request.method === 'GET') return json({ email: user.email, demo: user.demo, accounts: configured.map(publicAccount), settingsAvailable:true });
   if (!env.DB) throw new HttpError(503, 'Database is not configured');
+  if (url.pathname === '/api/drafts' || url.pathname.startsWith('/api/drafts/')) {
+    const response = await drafts(request,env,configured,user);
+    if (response) return response;
+  }
   if (url.pathname === '/api/feedback' && request.method === 'POST') {
     const body=await request.json();
     if(typeof body.message!=='string' || !body.message.trim() || body.message.length>10000) throw new HttpError(400,'Write feedback of up to 10,000 characters');

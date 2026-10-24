@@ -9,7 +9,7 @@ No hosted account, Google sign-in, Docker, or public webhook endpoint. Your comp
 Requires **Node.js 22.16 or newer**.
 
 ```sh
-npx --yes github:uditk2/project-inbox
+npx --yes project-inbox
 ```
 
 The command starts a loopback-only local process and opens your browser. Add a project name, mailbox address, and **full-access Resend API key** in Settings. Repeat for your other projects. Saved accounts remain available after restarts.
@@ -17,12 +17,16 @@ The command starts a loopback-only local process and opens your browser. Add a p
 Try the interface without connecting email:
 
 ```sh
-npx --yes github:uditk2/project-inbox --demo
+npx --yes project-inbox --demo
 ```
 
 The demo uses sample messages in memory and cannot send or save real credentials.
 
-The npm registry package is not published yet. Once available, the equivalent command will be `npx project-inbox`. The GitHub command above works independently of registry publication.
+The client is published on npm. Source is also available from GitHub.
+
+## Agent integration
+
+[Project Inbox MCP](packages/mcp/README.md) connects agents to the running local app for account discovery, sync, message search, reading, composing drafts, and sending authorized messages. It uses the same local settings without returning Resend keys to the agent. Requires Project Inbox 0.1.1 or later for draft and send tools.
 
 ## What it does
 

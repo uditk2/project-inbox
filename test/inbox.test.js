@@ -75,6 +75,22 @@ test('send is idempotent and from identity comes from the chosen account',async(
     assert.equal((await f.env.DB.prepare('SELECT count(*) AS n FROM messages').first()).n,1);
   }finally{globalThis.fetch=originalFetch;f.close();}
 });
+test('draft composition never sends, validates account and recipients, and sends idempotently',async()=>{
+  const f=await fixture();const originalFetch=globalThis.fetch;let calls=0;let sent;
+  globalThis.fetch=async(_url,options)=>{calls++;sent=JSON.parse(options.body);return Response.json({id:'draft-send-1'});};
+  try {
+    const payload={accountId:'studio',to:['reader@example.com'],subject:'Draft',text:'Hello'};
+    assert.equal((await worker.fetch(request('/api/drafts','POST',{...payload,to:['bad']}),f.env)).status,400);
+    assert.equal((await worker.fetch(request('/api/drafts','POST',{...payload,replyToId:'other-account-message'}),f.env)).status,400);
+    const response=await worker.fetch(request('/api/drafts','POST',payload),f.env);
+    assert.equal(response.status,201);
+    const draft=await response.json();assert.equal(draft.status,'draft');assert.equal(calls,0);
+    const drafts=await (await worker.fetch(request('/api/drafts'),f.env)).json();assert.equal(drafts.drafts.length,1);
+    for(let i=0;i<2;i++) assert.equal((await worker.fetch(request(`/api/drafts/${draft.id}/send`,'POST',{}),f.env)).status,200);
+    assert.equal(calls,1);assert.deepEqual(sent.to,payload.to);assert.equal(sent.from,'Studio <hello@studio.example>');
+    assert.equal((await (await worker.fetch(request(`/api/drafts/${draft.id}`),f.env)).json()).status,'sent');
+  } finally {globalThis.fetch=originalFetch;f.close();}
+});
 test('rich mail preserves formatting while stripping executable and remote content',()=>{
   const clean=safeMessageHtml('<p><span style="font-family: Georgia; font-weight: bold">Hello</span><script>alert(1)</script><img src="https://tracker.example/pixel"><a href="javascript:alert(1)" onclick="evil()">bad</a><a href="https://example.com">good</a></p>');
   assert.match(clean,/font-family:Georgia/);assert.match(clean,/font-weight:bold/);
