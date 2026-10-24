@@ -1,0 +1,50 @@
+{
+  "name": "project-inbox",
+  "version": "0.1.0",
+  "description": "Lightweight open source email client with a local unified inbox for multiple Resend accounts.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "project-inbox": "bin/cli.js"
+  },
+  "engines": {
+    "node": ">=22.16"
+  },
+  "files": [
+    "bin",
+    "src",
+    "public",
+    "migrations",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "email-client",
+    "unified-inbox",
+    "resend",
+    "self-hosted",
+    "webmail",
+    "open-source",
+    "multiple-accounts",
+    "local-first"
+  ],
+  "scripts": {
+    "start": "node bin/cli.js",
+    "dev": "node bin/cli.js --no-open",
+    "demo": "node bin/cli.js --demo",
+    "test": "node --test",
+    "check": "node --check src/app.js && node --check src/core.js && node --check public/app.js && node --check bin/cli.js",
+    "build": "npm pack --dry-run"
+  },
+  "dependencies": {
+    "sanitize-html": "^2.18.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uditk2/project-inbox.git"
+  },
+  "homepage": "https://github.com/uditk2/project-inbox#readme",
+  "bugs": {
+    "url": "https://github.com/uditk2/project-inbox/issues"
+  }
+}
