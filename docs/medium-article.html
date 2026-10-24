@@ -26,11 +26,12 @@
 <h2>A domain still needs somewhere to receive mail</h2>
 <p>Building the client did not remove the DNS work. SlayFit initially forwarded incoming mail through Cloudflare to Gmail. That arrangement could verify an address, but it would not put incoming messages into the Resend account the client reads.</p>
 <p>We switched the incoming route to the receiving record supplied by Resend. Outgoing domain verification and incoming mail routing are separate checks. A working send test does not establish that receiving works.</p>
-<p>The first live outgoing test reached its destination. Receiving configuration was subsequently verified by Resend; a full incoming-message test remains part of the rollout.</p>
+<p>The first live outgoing test reached its destination. After switching the incoming route, a self-addressed test also arrived in Project Inbox and its message body opened successfully. That gave us a real send-and-receive check, rather than relying only on a verified-domain badge.</p>
 <h2>Keep the first release small enough to use</h2>
 <p>The code separates routing, synchronization, sending, formatting, credential handling, and storage. The client uses ordinary HTML, CSS, and JavaScript. There is no frontend framework build step and no Docker requirement.</p>
 <p>The package is designed to start with one npm command. The public GitHub source can be used independently of an npm registry release, and the repository includes CI checks and a publishing workflow.</p>
 <p>It is deliberately an early Resend client. Outgoing attachments, calendar features, mobile synchronization, and notifications while everything is closed are not part of this release.</p>
 <p>My next step is to use it with my own projects for a few days. That should tell me more than adding hosted sign-in before the local workflow has settled.</p>
+<p>The next additions were straightforward everyday tools: Trash with Restore, permanent local deletion that releases cached storage, and feedback saved on the computer. Feedback can open a prefilled GitHub issue, but the user reviews and submits it on GitHub. None of that requires giving the client access to a personal Gmail inbox.</p>
 <p>If you also have several project addresses on Resend and want one place to manage them, the source and setup instructions are available in the Project Inbox repository. The useful question for this first version is whether it makes that daily task easier.</p>
 <p><a href="https://github.com/uditk2/project-inbox">Project Inbox source and setup</a> · <a href="https://resend.com/docs/api-reference/emails/list-received-emails">Resend received-mail API</a></p></body></html>

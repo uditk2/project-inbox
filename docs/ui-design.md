@@ -17,3 +17,9 @@ Visual checks used fictional Studio and Workshop demo accounts. Checked message 
 Compose supports font family and size, bold/italic/underline, lists, safe links, and clear formatting. The editable message produces both plain text and HTML. Pasted or dropped content is inserted as text, preventing imported active HTML. Links accept only HTTP, HTTPS, and mailto protocols. Empty messages and HTML over 100,000 characters are rejected before sending. Formatting changes reset the send retry identifier just like text edits.
 
 Rich compose visual checks confirmed combined bold and Georgia styling survive together, invalid script links are rejected, and HTTPS links preserve selected formatting. No email was sent during these checks. Reference: `/private/tmp/project-inbox-rich-compose.png`.
+
+Trash provides reversible removal from regular folders. The reader shows Move to Trash for active messages and Restore plus Delete permanently for trashed messages. Permanent deletion asks for explicit confirmation at the moment of action and explains that only the local copy is deleted; Resend's stored copy is unchanged. There is no bulk empty-trash action. Replies are hidden for trashed messages.
+
+Feedback is available in the navigation and is stored locally for later work. Users write their own idea or issue; message content is never collected automatically. The modal validates nonempty text with a 10,000-character limit, preserves the draft on save errors, and shows up to ten saved entries. Feedback can be exported as JSON. Nothing is sent externally.
+
+Each saved feedback entry offers Review as GitHub issue, opening a prefilled public issue draft in the repository. The user reviews and submits it on GitHub; the app does not submit issues or request a GitHub token. Only the feedback text and fixed app version are included, with no automatically attached mail, keys, or configuration. The modal warns that GitHub issues are public.

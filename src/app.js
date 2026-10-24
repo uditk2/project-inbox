@@ -3,13 +3,25 @@ import { syncAccount } from './sync.js';
 import { localRequest, HttpError, normalizeReceived, normalizeSent, publicAccount, resend, loadAccounts, encryptCredentials, validEmail } from './core.js';
 
 const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
-const messageColumns = 'id,account_id,direction,sender,recipients,subject,substr(body_text,1,180) AS preview,received_at,is_read,archived,status';
+const messageColumns = 'id,account_id,direction,sender,recipients,subject,substr(body_text,1,180) AS preview,received_at,is_read,archived,trashed,status';
 
 async function api(request, env, user) {
   const url = new URL(request.url);
   const configured = await loadAccounts(env);
   if (url.pathname === '/api/session' && request.method === 'GET') return json({ email: user.email, demo: user.demo, accounts: configured.map(publicAccount), settingsAvailable:true });
   if (!env.DB) throw new HttpError(503, 'Database is not configured');
+  if (url.pathname === '/api/feedback' && request.method === 'POST') {
+    const body=await request.json();
+    if(typeof body.message!=='string' || !body.message.trim() || body.message.length>10000) throw new HttpError(400,'Write feedback of up to 10,000 characters');
+    const id=crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO feedback VALUES (?,?,?)').bind(id,body.message.trim(),new Date().toISOString()).run();
+    return json({id});
+  }
+  if (url.pathname === '/api/feedback' && request.method === 'GET') return json({feedback:(await env.DB.prepare('SELECT * FROM feedback ORDER BY created_at DESC LIMIT 100').all()).results});
+  if (url.pathname === '/api/feedback/export' && request.method === 'GET') {
+    const result=await env.DB.prepare('SELECT * FROM feedback ORDER BY created_at').all();
+    return new Response(JSON.stringify(result.results,null,2),{headers:{'Content-Type':'application/json','Content-Disposition':'attachment; filename="project-inbox-feedback.json"','Cache-Control':'no-store'}});
+  }
   if (url.pathname === '/api/accounts' && request.method === 'POST') {
     if (user.demo) throw new HttpError(403,'Demo mode cannot save real credentials');
     const input = await request.json();
@@ -30,18 +42,31 @@ async function api(request, env, user) {
   }
   if (url.pathname === '/api/messages' && request.method === 'GET') {
     const folder = url.searchParams.get('folder') || 'inbox';
-    const conditions = [folder === 'sent' ? "direction='outbound'" : "direction='inbound'", folder === 'archive' ? 'archived=1' : 'archived=0'];
+    const conditions = folder==='trash'?['trashed=1']:["trashed=0",folder === 'sent' ? "direction='outbound'" : "direction='inbound'", folder === 'archive' ? 'archived=1' : 'archived=0'];
     const bindings = [];
     if (url.searchParams.get('account')) { conditions.push('account_id=?'); bindings.push(url.searchParams.get('account')); }
     if (url.searchParams.get('q')) { conditions.push('(subject LIKE ? OR sender LIKE ? OR body_text LIKE ?)'); const term = `%${url.searchParams.get('q').slice(0,200)}%`; bindings.push(term,term,term); }
     const offset = Math.max(0,Math.min(100000,Number(url.searchParams.get('offset')) || 0));
     const result = await env.DB.prepare(`SELECT ${messageColumns} FROM messages WHERE ${conditions.join(' AND ')} ORDER BY received_at DESC,id DESC LIMIT 51 OFFSET ?`).bind(...bindings,offset).all();
-    const stats = await env.DB.prepare("SELECT account_id,COUNT(*) AS unread FROM messages WHERE direction='inbound' AND is_read=0 AND archived=0 GROUP BY account_id").all();
+    const stats = await env.DB.prepare("SELECT account_id,COUNT(*) AS unread FROM messages WHERE direction='inbound' AND is_read=0 AND archived=0 AND trashed=0 GROUP BY account_id").all();
     return json({ messages: result.results.slice(0,50), hasMore: result.results.length > 50, unread: stats.results });
   }
   const match = url.pathname.match(/^\/api\/messages\/([^/]+)$/);
   if (match) {
     const id = decodeURIComponent(match[1]);
+    if(request.method==='DELETE') {
+      const body=await request.json();
+      if(body.confirm!==true) throw new HttpError(400,'Confirm permanent local deletion');
+      const message=await env.DB.prepare('SELECT * FROM messages WHERE id=? AND trashed=1').bind(id).first();
+      if(!message) throw new HttpError(404,'Move this message to Trash before permanently deleting it');
+      await env.DB.batch([
+        env.DB.prepare('INSERT OR IGNORE INTO deleted_messages VALUES (?,?,?,?)').bind(message.account_id,message.provider_id,message.direction,new Date().toISOString()),
+        env.DB.prepare('DELETE FROM outbox WHERE sent_id=?').bind(id),
+        env.DB.prepare('DELETE FROM messages WHERE id=?').bind(id)
+      ]);
+      env.DB.compact?.();
+      return json({deleted:true});
+    }
     if (request.method === 'GET') {
       let message = await env.DB.prepare('SELECT * FROM messages WHERE id=?').bind(id).first();
       if (!message) throw new HttpError(404, 'Message not found');
@@ -57,7 +82,7 @@ async function api(request, env, user) {
     if (request.method === 'PATCH') {
       const body = await request.json();
       const updates = []; const values = [];
-      for (const [key, column] of [['read','is_read'],['archived','archived']]) if (typeof body[key] === 'boolean') { updates.push(`${column}=?`); values.push(Number(body[key])); }
+      for (const [key, column] of [['read','is_read'],['archived','archived'],['trashed','trashed']]) if (typeof body[key] === 'boolean') { updates.push(`${column}=?`); values.push(Number(body[key])); }
       if (!updates.length) throw new HttpError(400, 'No changes supplied');
       await env.DB.prepare(`UPDATE messages SET ${updates.join(',')} WHERE id=?`).bind(...values,id).run();
       return json({ updated: true });

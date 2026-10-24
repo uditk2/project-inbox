@@ -95,6 +95,6 @@ export async function hash(value) {
 }
 export function insertMessage(db, message) {
   const keys = Object.keys(message);
-  return db.prepare(`INSERT OR IGNORE INTO messages (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`).bind(...Object.values(message));
+  return db.prepare(`INSERT OR IGNORE INTO messages (${keys.join(',')}) SELECT ${keys.map(() => '?').join(',')} WHERE NOT EXISTS (SELECT 1 FROM deleted_messages WHERE account_id=? AND provider_id=? AND direction=?)`).bind(...Object.values(message),message.account_id,message.provider_id,message.direction);
 }
 export function publicAccount(a) { return { id: a.id, name: a.name || a.id, mailbox: a.mailbox }; }

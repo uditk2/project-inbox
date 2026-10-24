@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/app.js';
 import { openDatabase } from '../src/sqlite.js';
-import { accounts, hash, normalizeReceived, validateSend, loadAccounts } from '../src/core.js';
+import { accounts, normalizeReceived, validateSend, loadAccounts, insertMessage } from '../src/core.js';
 import {safeMessageHtml} from '../src/format.js';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -92,4 +92,35 @@ test('encrypted accounts survive database reopen',async()=>{
     const loaded=await loadAccounts(env);
     assert.equal(loaded[0].apiKey,'re_persistence_test');
   }finally{db.close();rmSync(dir,{recursive:true,force:true});}
+});
+test('Trash restores messages and permanent deletion removes content without resurrection',async()=>{
+  const f=await fixture();try {
+    const message=normalizeReceived(configured[0],{id:'trash-test',from:'reader@example.com',to:['hello@studio.example'],subject:'Temporary',text:'Body to delete'});
+    await insertMessage(f.env.DB,message).run();
+    const path=`/api/messages/${encodeURIComponent(message.id)}`;
+    assert.equal((await worker.fetch(request(path,'DELETE',{confirm:true}),f.env)).status,404);
+    await worker.fetch(request(path,'PATCH',{trashed:true}),f.env);
+    assert.equal((await (await worker.fetch(request('/api/messages?folder=inbox'),f.env)).json()).messages.length,0);
+    assert.equal((await (await worker.fetch(request('/api/messages?folder=trash'),f.env)).json()).messages.length,1);
+    await worker.fetch(request(path,'PATCH',{trashed:false}),f.env);
+    assert.equal((await (await worker.fetch(request('/api/messages'),f.env)).json()).messages.length,1);
+    await worker.fetch(request(path,'PATCH',{trashed:true}),f.env);
+    assert.equal((await worker.fetch(request(path,'DELETE',{confirm:false}),f.env)).status,400);
+    assert.equal((await worker.fetch(request(path,'DELETE',{confirm:true}),f.env)).status,200);
+    assert.equal((await worker.fetch(request(path),f.env)).status,404);
+    await insertMessage(f.env.DB,message).run();
+    assert.equal((await f.env.DB.prepare('SELECT count(*) AS n FROM messages').first()).n,0);
+    assert.equal((await f.env.DB.prepare('SELECT count(*) AS n FROM deleted_messages').first()).n,1);
+  }finally{f.close();}
+});
+test('feedback remains local and exports only explicitly entered text',async()=>{
+  const f=await fixture();try {
+    const response=await worker.fetch(request('/api/feedback','POST',{message:'Please improve keyboard navigation.'}),f.env);
+    assert.equal(response.status,200);
+    const data=await (await worker.fetch(request('/api/feedback'),f.env)).json();
+    assert.equal(data.feedback[0].message,'Please improve keyboard navigation.');
+    const exported=await (await worker.fetch(request('/api/feedback/export'),f.env)).text();
+    assert.ok(!exported.includes('apiKey'));assert.ok(!exported.includes('re_test_only'));
+    assert.equal((await worker.fetch(request('/api/feedback','POST',{message:''}),f.env)).status,400);
+  }finally{f.close();}
 });

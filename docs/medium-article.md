@@ -56,7 +56,7 @@ Building the client did not remove the DNS work. SlayFit initially forwarded inc
 
 We switched the incoming route to the receiving record supplied by Resend. Outgoing domain verification and incoming mail routing are separate checks. A working send test does not establish that receiving works.
 
-The first live outgoing test reached its destination. Receiving configuration was subsequently verified by Resend; a full incoming-message test remains part of the rollout.
+The first live outgoing test reached its destination. After switching the incoming route, a self-addressed test also arrived in Project Inbox and its message body opened successfully. That gave us a real send-and-receive check, rather than relying only on a verified-domain badge.
 
 ## Keep the first release small enough to use
 
@@ -68,7 +68,8 @@ It is deliberately an early Resend client. Outgoing attachments, calendar featur
 
 My next step is to use it with my own projects for a few days. That should tell me more than adding hosted sign-in before the local workflow has settled.
 
+The next additions were straightforward everyday tools: Trash with Restore, permanent local deletion that releases cached storage, and feedback saved on the computer. Feedback can open a prefilled GitHub issue, but the user reviews and submits it on GitHub. None of that requires giving the client access to a personal Gmail inbox.
+
 If you also have several project addresses on Resend and want one place to manage them, the source and setup instructions are available in the Project Inbox repository. The useful question for this first version is whether it makes that daily task easier.
 
 [Project Inbox source and setup](https://github.com/uditk2/project-inbox) · [Resend received-mail API](https://resend.com/docs/api-reference/emails/list-received-emails)
-

@@ -30,7 +30,9 @@ The npm registry package is not published yet. Once available, the equivalent co
 - Syncs received and sent email through Resend's APIs. Imports history in bounded pages and resumes interrupted imports.
 - Compose and reply from the selected project's address.
 - Font family, font size, bold, italic, underline, lists, and links. Sends plain text plus sanitized HTML.
-- Read/unread state, local archive, search, and incoming attachment downloads.
+- Read/unread state, archive, Trash, Restore, search, and incoming attachment downloads.
+- Permanent local deletion removes cached content and compacts SQLite. A small deletion marker prevents re-import; Resend's copy is unaffected.
+- Save feedback locally, export it, or open a prefilled public GitHub issue for review and submission.
 - Optional desktop notifications while the browser app is open and active.
 - SQLite persistence and encrypted storage for Resend API keys.
 
@@ -93,6 +95,6 @@ GitHub Actions checks Windows, macOS, and Linux. The publishing workflow runs on
 
 ## Current limits
 
-This is a local Resend client, not a replacement for every feature of a traditional mail suite. Outgoing attachments, CC/BCC, saved drafts across browser restarts, calendar integration, mobile sync, and closed-app notifications are not included yet. Search covers cached subject/sender/body; message bodies are fetched on opening, so unvisited body text may not be searchable. Archives and read state are local and do not alter Resend's records.
+This is a local Resend client, not a replacement for every feature of a traditional mail suite. Outgoing attachments, CC/BCC, saved drafts across browser restarts, calendar integration, mobile sync, and closed-app notifications are not included yet. Search covers cached subject/sender/body; message bodies are fetched on opening, so unvisited body text may not be searchable. Archives, read state, and deletions are local and do not alter Resend's records.
 
 MIT licensed. Issues and small, focused contributions are welcome.

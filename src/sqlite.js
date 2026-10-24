@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 
 export function openDatabase(path, migrationDir) {
   const connection = new DatabaseSync(path);
-  connection.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;');
+  connection.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA secure_delete=ON;');
   connection.exec('CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY)');
   for (const name of readdirSync(migrationDir).filter(n => n.endsWith('.sql')).sort()) {
     if (connection.prepare('SELECT 1 FROM schema_migrations WHERE name=?').get(name)) continue;
@@ -27,6 +27,7 @@ export function openDatabase(path, migrationDir) {
       try { const results = []; for (const s of statements) results.push(await s.run()); connection.exec('COMMIT'); return results; }
       catch (e) { connection.exec('ROLLBACK'); throw e; }
     },
+    compact: () => {connection.exec('PRAGMA wal_checkpoint(TRUNCATE); VACUUM; PRAGMA wal_checkpoint(TRUNCATE);');},
     close: () => connection.close()
   };
 }
