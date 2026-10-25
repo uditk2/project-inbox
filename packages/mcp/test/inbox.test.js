@@ -31,3 +31,28 @@ test('read returns bounded plain text without raw headers, HTML, or provider fie
   assert.equal('headers' in result,false);
   assert.equal('body_html' in result,false);
 });
+
+test('client finds the app: explicit URL, then discovery, then port 8787', () => {
+  const found = () => 'http://127.0.0.1:9001';
+  assert.equal(new InboxClient('http://localhost:8798', fetch, found).origin, 'http://localhost:8798');
+  assert.equal(new InboxClient(undefined, fetch, found).origin, 'http://127.0.0.1:9001');
+  assert.equal(new InboxClient(undefined, fetch, () => null).origin, 'http://127.0.0.1:8787');
+});
+
+test('discovery ignores stale, foreign and malformed files', async () => {
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { discoveredUrl } = await import('../src/inbox.js');
+  const dir = mkdtempSync(join(tmpdir(), 'pi-discover-'));
+  const write = value => writeFileSync(join(dir, 'server.json'), typeof value === 'string' ? value : JSON.stringify(value));
+  assert.equal(discoveredUrl(dir), null);
+  write({ url: 'http://127.0.0.1:9002', pid: process.pid });
+  assert.equal(discoveredUrl(dir), 'http://127.0.0.1:9002');
+  write({ url: 'http://127.0.0.1:9002', pid: 2 ** 22 + 12345 });
+  assert.equal(discoveredUrl(dir), null);
+  write({ url: 'https://evil.example.com', pid: process.pid });
+  assert.equal(discoveredUrl(dir), null);
+  write('not json');
+  assert.equal(discoveredUrl(dir), null);
+});

@@ -1,4 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
 const folders = ['inbox', 'sent', 'archive', 'trash'];
+const DEFAULT_URL = 'http://127.0.0.1:8787';
 
 export function localOrigin(value = 'http://127.0.0.1:8787') {
   const url = new URL(value);
@@ -8,18 +13,34 @@ export function localOrigin(value = 'http://127.0.0.1:8787') {
   return url.origin;
 }
 
+// The running app records its address here so the MCP can find it when it was started on a non-default port.
+export function discoveredUrl(dataDir = process.env.DATA_DIR || join(homedir(), '.project-inbox')) {
+  try {
+    const { url, pid } = JSON.parse(readFileSync(join(dataDir, 'server.json'), 'utf8'));
+    process.kill(pid, 0); // throws if the app is no longer running, so a stale file is ignored
+    return localOrigin(url);
+  } catch { return null; }
+}
+
+// Order: PROJECT_INBOX_URL, then the running app's address, then the default port 8787.
 export class InboxClient {
-  constructor(value, request = fetch) { this.origin = localOrigin(value); this.request = request; }
+  constructor(value, request = fetch, discover = discoveredUrl) {
+    this.configured = value ? localOrigin(value) : null;
+    this.discover = discover;
+    this.request = request;
+  }
+  get origin() { return this.configured || this.discover() || localOrigin(DEFAULT_URL); }
 
   async api(path, body, method = body ? 'POST' : 'GET') {
     let response;
+    const origin = this.origin;
     try {
-      response = await this.request(`${this.origin}${path}`, {
+      response = await this.request(`${origin}${path}`, {
         method, redirect: 'error', signal: AbortSignal.timeout(60000),
-        headers: { Accept: 'application/json', ...(body ? { Origin: this.origin, 'Content-Type': 'application/json' } : {}) },
+        headers: { Accept: 'application/json', ...(body ? { Origin: origin, 'Content-Type': 'application/json' } : {}) },
         ...(body ? { body: JSON.stringify(body) } : {})
       });
-    } catch { throw new Error('Cannot connect to Project Inbox. Start the app and check PROJECT_INBOX_URL.'); }
+    } catch { throw new Error('Cannot connect to Project Inbox. Start Project Inbox (default port 8787), or set PROJECT_INBOX_URL.'); }
     if (!response.ok) throw new Error(`Project Inbox request failed (${response.status}). Check the local app.`);
     return response.json();
   }

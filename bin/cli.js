@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createServer } from 'node:http';
-import { readFile, mkdir, writeFile, chmod } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, chmod, rm } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { join, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +24,8 @@ const demo = args.includes('--demo');
 const dir = new URL('../',import.meta.url);
 const dataDir = process.env.DATA_DIR || join(homedir(),'.project-inbox');
 if (!demo) await mkdir(dataDir,{recursive:true,mode:0o700});
+const announce = join(dataDir,'server.json');
+const forget = () => rm(announce,{force:true}).catch(()=>{});
 let credentialsKey = process.env.CREDENTIALS_KEY;
 if (!credentialsKey) {
   if (demo) credentialsKey = randomBytes(32).toString('base64url');
@@ -60,6 +62,8 @@ const server = createServer(async (incoming,outgoing) => {
 server.listen(port,'127.0.0.1',async()=>{
   const url=`http://localhost:${port}`;
   console.log(`Project Inbox: ${url}${demo?' (demo data only)':''}\nPress Ctrl+C to stop.`);
+  // Lets project-inbox-mcp find this app if it runs on a port other than 8787. Demo runs never advertise themselves.
+  if (!demo) await writeFile(announce,JSON.stringify({url:`http://127.0.0.1:${port}`,pid:process.pid}),{mode:0o600}).catch(()=>{});
   if (!args.includes('--no-open')) {
     const {execFile}=await import('node:child_process');
     const [command,values]=process.platform==='darwin'?['open',[url]]:process.platform==='win32'?['cmd',['/c','start','',url]]:['xdg-open',[url]];
@@ -67,5 +71,4 @@ server.listen(port,'127.0.0.1',async()=>{
   }
 });
 server.on('error',error=>{console.error(error.code === 'EADDRINUSE'?'Port is in use. Choose another with --port.':'Could not start server.');process.exitCode=1;db.close();});
-process.on('SIGINT',()=>server.close(()=>{db.close();process.exit(0);}));
-process.on('SIGTERM',()=>server.close(()=>{db.close();process.exit(0);}));
+for (const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>server.close(async()=>{if(!demo) await forget();db.close();process.exit(0);}));

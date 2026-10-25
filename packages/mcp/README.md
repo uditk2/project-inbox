@@ -17,14 +17,13 @@ Add your Resend accounts in Settings. Then configure your MCP client:
   "mcpServers": {
     "project-inbox": {
       "command": "npx",
-      "args": ["--yes", "project-inbox-mcp"],
-      "env": { "PROJECT_INBOX_URL": "http://127.0.0.1:8787" }
+      "args": ["--yes", "project-inbox-mcp"]
     }
   }
 }
 ```
 
-Use the port printed by the inbox app (for example `8798` if you started it with `--port 8798`). The app must remain running. Configure this only in a trusted local MCP host: connecting grants that host access to all configured project mailboxes. It does not connect to Gmail.
+The MCP finds the app on its own: it uses `PROJECT_INBOX_URL` if you set it, otherwise the address the running app recorded in `~/.project-inbox/server.json`, otherwise the default `http://127.0.0.1:8787`. So a normal install needs no port setting, even if you started the app with `--port`. Set `PROJECT_INBOX_URL` only to pin a specific address. The app must remain running. Configure this only in a trusted local MCP host: connecting grants that host access to all configured project mailboxes. It does not connect to Gmail.
 
 ## Tools
 
