@@ -11,11 +11,11 @@ export function localOrigin(value = 'http://127.0.0.1:8787') {
 export class InboxClient {
   constructor(value, request = fetch) { this.origin = localOrigin(value); this.request = request; }
 
-  async api(path, body) {
+  async api(path, body, method = body ? 'POST' : 'GET') {
     let response;
     try {
       response = await this.request(`${this.origin}${path}`, {
-        method: body ? 'POST' : 'GET', redirect: 'error', signal: AbortSignal.timeout(60000),
+        method, redirect: 'error', signal: AbortSignal.timeout(60000),
         headers: { Accept: 'application/json', ...(body ? { Origin: this.origin, 'Content-Type': 'application/json' } : {}) },
         ...(body ? { body: JSON.stringify(body) } : {})
       });
@@ -36,6 +36,36 @@ export class InboxClient {
   async compose(message) { return this.api('/api/drafts',message); }
   async drafts() { return this.api('/api/drafts'); }
   async sendDraft(draftId) { return this.api(`/api/drafts/${encodeURIComponent(draftId)}/send`,{}); }
+
+  async tasks({from, to, project} = {}) {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    if (project) params.set('project', project);
+    return this.api(`/api/tasks${params.size ? `?${params}` : ''}`);
+  }
+  async logTask(task) { return this.api('/api/tasks', task); }
+  // Updates an item addressed either by id or by a natural key, looking the id up when only the key is known.
+  async patchByKey({base, id, key, keyHint, missing, changes}) {
+    if (!id) {
+      if (!key) throw new Error(keyHint);
+      const list = await this.api(`/api/${base}`);
+      id = list[base].find(key)?.id;
+      if (!id) throw new Error(missing);
+    }
+    return this.api(`/api/${base}/${encodeURIComponent(id)}`, changes, 'PATCH');
+  }
+  async updateTask({id, external_ref, ...changes}) {
+    return this.patchByKey({base:'tasks', id, changes, key:external_ref && (t => t.external_ref === external_ref),
+      keyHint:'Provide the task id or its external_ref', missing:'No task has that external_ref. Create it with log_task first.'});
+  }
+  async task(id) { return this.api(`/api/tasks/${encodeURIComponent(id)}`); }
+  async updateSchedule({id, source, external_id, ...changes}) {
+    return this.patchByKey({base:'schedules', id, changes, key:source && external_id && (s => s.source === source && s.external_id === external_id),
+      keyHint:'Provide the schedule id, or its source and external_id', missing:'No schedule matches. Add it with sync_schedules first.'});
+  }
+  async schedules() { return this.api('/api/schedules'); }
+  async syncSchedules(schedules) { return this.api('/api/schedules', { schedules }); }
 
   async list({folder = 'inbox', accountId, query, offset = 0} = {}) {
     if (!folders.includes(folder) || !Number.isInteger(offset) || offset < 0 || offset > 100000) throw new Error('Invalid folder or offset');

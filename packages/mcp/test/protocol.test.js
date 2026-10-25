@@ -8,7 +8,7 @@ import {openDatabase} from '../../../src/sqlite.js';
 import {insertMessage} from '../../../src/core.js';
 import {fileURLToPath} from 'node:url';
 
-test('MCP handshake and seven tools work through real local APIs; draft retries send once',async()=>{
+test('MCP handshake and fourteen tools work through real local APIs; draft retries send once',async()=>{
   const DB=openDatabase(':memory:',new URL('../../../migrations/',import.meta.url));
   const env={DB,LOCAL_APP:'true',MAIL_ACCOUNTS_JSON:JSON.stringify([{id:'test',name:'Test project',mailbox:'hello@example.com',apiKey:'re_test_key_not_for_agents'}])};
   await insertMessage(DB,{id:'test:in:original',account_id:'test',provider_id:'original',direction:'inbound',sender:'reader@example.com',recipients:'["hello@example.com"]',subject:'Hello',body_text:'This is a test message.',body_loaded:1,message_id:'<original@example.com>',received_at:new Date().toISOString()}).run();
@@ -35,7 +35,7 @@ test('MCP handshake and seven tools work through real local APIs; draft retries 
   };
   try {
     await client.connect(transport);
-    const tools=await client.listTools();assert.equal(tools.tools.length,7);
+    const tools=await client.listTools();assert.equal(tools.tools.length,14);
     assert.equal(tools.tools.find(t=>t.name==='send_draft').annotations.readOnlyHint,false);
     assert.equal((await call('list_accounts')).accounts[0].id,'test');
     assert.equal((await call('sync_mail',{accountId:'test'})).hasMore,false);
@@ -52,6 +52,28 @@ test('MCP handshake and seven tools work through real local APIs; draft retries 
     assert.equal(sentPayload.headers['In-Reply-To'],'<original@example.com>');
     assert.deepEqual(sentPayload.to,['reader@example.com']);
     assert.equal((await call('list_drafts')).drafts[0].status,'sent');
+    const logged=await call('log_task',{task_date:'2026-10-25',title:'Paizix submission',project:'test',kind:'listing',status:'sent',external_ref:'paizix-1'});
+    const updated=await call('log_task',{task_date:'2026-10-25',title:'Paizix submission',status:'published',result_url:'https://example.com/listing',external_ref:'paizix-1'});
+    assert.equal(updated.tasks[0].id,logged.tasks[0].id);
+    const listed=await call('list_tasks',{from:'2026-10-01',to:'2026-10-31',project:'test'});
+    assert.equal(listed.tasks.length,1);assert.equal(listed.tasks[0].status,'published');
+    await call('sync_schedules',{schedules:[{source:'claude',external_id:'trig_1',name:'News queue',cadence_type:'cron',cadence:'CRON_TZ=Asia/Calcutta 0 9 * * *'}]});
+    await call('sync_schedules',{schedules:[{source:'claude',external_id:'trig_1',name:'News queue (renamed)',cadence_type:'cron',cadence:'0 9 * * *',enabled:false}]});
+    const scheduled=(await call('list_schedules')).schedules;
+    assert.equal(scheduled.length,1);assert.equal(scheduled[0].name,'News queue (renamed)');assert.equal(scheduled[0].enabled,false);
+    const resumed=await call('update_schedule',{source:'claude',external_id:'trig_1',enabled:true,cadence:'30 9 * * 1-5'});
+    assert.equal(resumed.schedule.enabled,true);assert.equal(resumed.schedule.cadence,'30 9 * * 1-5');assert.equal(resumed.schedule.name,'News queue (renamed)');
+    assert.equal((await client.callTool({name:'update_schedule',arguments:{source:'claude',external_id:'missing',enabled:false}})).isError,true);
+    // a task is started, progressed by external_ref, and keeps its history
+    await call('log_task',{task_date:'2026-10-26',title:'Directory submission',project:'test',kind:'listing',status:'in_progress',external_ref:'dir-1',schedule_source:'claude',schedule_external_id:'trig_1',note:'Started from the scheduled run'});
+    const progressed=await call('update_task',{external_ref:'dir-1',status:'sent',note:'Provider accepted the submission'});
+    assert.equal(progressed.task.status,'sent');assert.equal(progressed.task.title,'Directory submission');assert.equal(progressed.task.schedule_external_id,'trig_1');
+    await call('update_task',{id:progressed.task.id,status:'published',result_url:'https://example.com/dir/listing'});
+    const history=await call('get_task',{id:progressed.task.id});
+    assert.deepEqual(history.events.map(e=>e.status),['in_progress','sent','published']);
+    assert.equal(history.events[1].note,'Provider accepted the submission');
+    assert.equal((await client.callTool({name:'update_task',arguments:{external_ref:'nope',status:'sent'}})).isError,true);
+    assert.equal((await client.callTool({name:'log_task',arguments:{task_date:'2026-02-30',title:'Bad date'}})).isError,true);
   } finally {
     await client.close();http.closeAllConnections();await new Promise(resolve=>http.close(resolve));DB.close();globalThis.fetch=originalFetch;
   }

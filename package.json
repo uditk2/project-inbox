@@ -33,7 +33,7 @@
     "dev": "node bin/cli.js --no-open",
     "demo": "node bin/cli.js --demo",
     "test": "node --test",
-    "check": "node --check src/app.js && node --check src/core.js && node --check public/app.js && node --check bin/cli.js",
+    "check": "node scripts/check.mjs",
     "build": "npm pack --dry-run"
   },
   "dependencies": {

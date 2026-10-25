@@ -24,6 +24,10 @@ The demo uses sample messages in memory and cannot send or save real credentials
 
 The client is published on npm. Source is also available from GitHub.
 
+## Task calendar
+
+The **Task calendar** in the sidebar shows what was done each day: posts, outreach emails, listings and profiles, each with a status (planned, drafted, sent, published, backlink verified, withdrawn, failed), the destination, a result link and notes. Entries live in the same local SQLite database as your mail. Use **Import post-log.csv** to backfill from a CSV with the columns `date, game, destination, status, result_url, account, notes`; importing the same file again updates entries instead of duplicating them. Agents record work as it happens through the MCP `log_task` and `update_task` tools, and each task keeps a timestamped history. Scheduled tasks can be imported from Codex (opt-in, names and schedules only) or saved by Claude through `sync_schedules`; a scheduled day shows whether a run was logged for it.
+
 ## Agent integration
 
 [Project Inbox MCP](packages/mcp/README.md) connects agents to the running local app for account discovery, sync, message search, reading, composing drafts, and sending authorized messages. It uses the same local settings without returning Resend keys to the agent. Requires Project Inbox 0.1.1 or later for draft and send tools.

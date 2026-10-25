@@ -4,7 +4,7 @@ import worker from '../src/app.js';
 import { openDatabase } from '../src/sqlite.js';
 import { accounts, normalizeReceived, validateSend, loadAccounts, insertMessage } from '../src/core.js';
 import {safeMessageHtml} from '../src/format.js';
-import {mkdtempSync,rmSync} from 'node:fs';
+import {mkdtempSync,rmSync,mkdirSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
@@ -139,4 +139,107 @@ test('feedback remains local and exports only explicitly entered text',async()=>
     assert.ok(!exported.includes('apiKey'));assert.ok(!exported.includes('re_test_only'));
     assert.equal((await worker.fetch(request('/api/feedback','POST',{message:''}),f.env)).status,400);
   }finally{f.close();}
+});
+
+test('task calendar stores, upserts, filters and validates tasks locally',async()=>{
+  const f=await fixture();try {
+    const base={task_date:'2026-10-25',project:'studio',kind:'listing',title:'Paizix submission',destination:'paizix.com',status:'sent',external_ref:'paizix-1'};
+    const created=await worker.fetch(request('/api/tasks','POST',base),f.env);assert.equal(created.status,201);
+    const id=(await created.json()).tasks[0].id;
+    // same external_ref updates the existing row and keeps unspecified fields
+    const again=await (await worker.fetch(request('/api/tasks','POST',{external_ref:'paizix-1',status:'published',result_url:'https://paizix.com/yantra'}),f.env)).json();
+    assert.equal(again.tasks[0].id,id);assert.equal(again.tasks[0].title,'Paizix submission');assert.equal(again.tasks[0].status,'published');
+    await worker.fetch(request('/api/tasks','POST',{tasks:[{...base,task_date:'2026-09-02',external_ref:'old',title:'Older'},{...base,task_date:'2026-10-26',project:'workshop',external_ref:'other',title:'Other project'}]}),f.env);
+    const month=await (await worker.fetch(request('/api/tasks?from=2026-10-01&to=2026-10-31'),f.env)).json();
+    assert.deepEqual(month.tasks.map(t=>t.title),['Other project','Paizix submission']);
+    assert.equal((await (await worker.fetch(request('/api/tasks?project=studio'),f.env)).json()).tasks.length,2);
+    // a batch with one bad row writes nothing
+    const before=(await (await worker.fetch(request('/api/tasks'),f.env)).json()).tasks.length;
+    assert.equal((await worker.fetch(request('/api/tasks','POST',{tasks:[{...base,external_ref:'ok-row',title:'Fine'},{...base,external_ref:'bad-row',status:'done'}]}),f.env)).status,400);
+    assert.equal((await (await worker.fetch(request('/api/tasks'),f.env)).json()).tasks.length,before);
+    for(const bad of [{...base,task_date:'2026-02-30'},{...base,title:'  '},{...base,result_url:'javascript:alert(1)'},{...base,project:'Bad Project'},{...base,kind:'spam'}])
+      assert.equal((await worker.fetch(request('/api/tasks','POST',bad),f.env)).status,400);
+    assert.equal((await worker.fetch(request('/api/tasks?from=nope'),f.env)).status,400);
+    const cross=new Request('http://localhost:8787/api/tasks',{method:'POST',headers:{Origin:'https://attacker.example','Content-Type':'application/json'},body:JSON.stringify(base)});
+    assert.equal((await worker.fetch(cross,f.env)).status,403);
+  }finally{f.close();}
+});
+
+test('schedules are saved, updated in place and validated; Codex scan reads only schedule fields',async()=>{
+  const f=await fixture();const home=mkdtempSync(join(tmpdir(),'codex-'));try {
+    const claude={source:'claude',external_id:'trig_1',name:'News queue',cadence_type:'cron',cadence:'CRON_TZ=Asia/Calcutta 0 9 * * *'};
+    assert.equal((await worker.fetch(request('/api/schedules','POST',{schedules:[claude]}),f.env)).status,201);
+    await worker.fetch(request('/api/schedules','POST',{...claude,name:'News queue v2',enabled:false}),f.env);
+    const list=await (await worker.fetch(request('/api/schedules'),f.env)).json();
+    assert.equal(list.schedules.length,1);assert.equal(list.schedules[0].name,'News queue v2');assert.equal(list.schedules[0].enabled,false);
+    for(const bad of [{...claude,source:'unknown'},{...claude,cadence_type:'weird'},{...claude,cadence:'; DROP TABLE'},{...claude,cadence:'FREQ=DAILY',cadence_type:'cron'},{...claude,name:' '},{...claude,starts_at:'nope'}])
+      assert.equal((await worker.fetch(request('/api/schedules','POST',bad),f.env)).status,400);
+    // Codex scan: schedule fields only; the prompt, even a multi-line one containing field-like lines, is never read
+    mkdirSync(join(home,'automations','daily-post'),{recursive:true});mkdirSync(join(home,'automations','broken'),{recursive:true});
+    writeFileSync(join(home,'automations','daily-post','automation.toml'),['id = "daily-post"','name = "Daily post"','prompt = """','name = "injected"','secret instructions','"""','status = "PAUSED"','rrule = "FREQ=DAILY;BYHOUR=10;BYMINUTE=0"','created_at = 1791046480768','[target]','name = "not-this-one"',''].join('\n'));
+    writeFileSync(join(home,'automations','broken','automation.toml'),'id = "broken"\n');
+    const env={...f.env,CODEX_HOME:home};
+    assert.equal((await worker.fetch(request('/api/schedules/scan','POST',{sources:['gmail']}),env)).status,400);
+    const scan=await (await worker.fetch(request('/api/schedules/scan','POST',{sources:['codex']}),env)).json();
+    assert.deepEqual([scan.found,scan.imported],[true,1]);
+    const codex=(await (await worker.fetch(request('/api/schedules'),f.env)).json()).schedules.find(s=>s.source==='codex');
+    assert.equal(codex.name,'Daily post');assert.equal(codex.enabled,false);assert.equal(codex.cadence,'FREQ=DAILY;BYHOUR=10;BYMINUTE=0');
+    assert.ok(!JSON.stringify(codex).includes('secret instructions'));
+    const missing=await (await worker.fetch(request('/api/schedules/scan','POST',{sources:['codex']}),{...f.env,CODEX_HOME:join(home,'nope')})).json();
+    assert.deepEqual([missing.found,missing.imported],[false,0]);
+  }finally{rmSync(home,{recursive:true,force:true});f.close();}
+});
+test('recurrence expands daily, hourly, weekly, once-only and cron schedules into calendar days',async()=>{
+  const R=await import('../public/calendar/recurrence.js');
+  const from=new Date(2026,9,1),to=new Date(2026,9,31);const days=s=>[...R.project(s,from,to).keys()];
+  const daily=days({cadence_type:'rrule',cadence:'FREQ=DAILY;BYHOUR=10;BYMINUTE=0',starts_at:new Date(2026,9,20,8,0).toISOString()});
+  assert.equal(daily[0],'2026-10-20');assert.equal(daily.length,12);
+  assert.deepEqual(days({cadence_type:'rrule',cadence:'FREQ=DAILY;COUNT=1;BYHOUR=19;BYMINUTE=47',starts_at:new Date(2026,9,24,19,44).toISOString()}),['2026-10-24']);
+  assert.equal(R.project({cadence_type:'rrule',cadence:'FREQ=HOURLY;INTERVAL=1',starts_at:new Date(2026,9,29,1,0).toISOString()},from,to).get('2026-10-30').label,'Hourly');
+  assert.deepEqual(days({cadence_type:'rrule',cadence:'FREQ=WEEKLY;BYDAY=MO,WE;BYHOUR=9;BYMINUTE=30',starts_at:new Date(2026,9,1,0,0).toISOString()}).slice(0,3),['2026-10-05','2026-10-07','2026-10-12']);
+  assert.equal(days({cadence_type:'cron',cadence:'CRON_TZ=Asia/Calcutta 0 9 * * *'}).length,31);
+  assert.equal(days({cadence_type:'cron',cadence:'30 8 * * 1-5'}).length,22);
+  assert.equal(R.project({cadence_type:'rrule',cadence:'FREQ=MONTHLY;BYMONTHDAY=3'},from,to),null);
+  assert.equal(R.describe({cadence_type:'rrule',cadence:'FREQ=DAILY;BYHOUR=10;BYMINUTE=0'}),'Daily at 10:00');
+});
+
+test('tasks keep a history, accept PATCH updates, and link to the schedule that triggered them',async()=>{
+  const f=await fixture();try {
+    const start=await (await worker.fetch(request('/api/tasks','POST',{task_date:'2026-10-26',title:'Directory submission',project:'studio',status:'in_progress',external_ref:'dir-1',schedule_source:'codex',schedule_external_id:'daily-post',note:'Started'}),f.env)).json();
+    const id=start.tasks[0].id;
+    // an upsert with no status change and no note adds no history line
+    await worker.fetch(request('/api/tasks','POST',{external_ref:'dir-1',destination:'example.com'}),f.env);
+    const patched=await worker.fetch(request(`/api/tasks/${id}`,'PATCH',{status:'published',result_url:'https://example.com/listing',note:'Verified live'}),f.env);
+    assert.equal(patched.status,200);assert.equal((await patched.json()).task.status,'published');
+    const detail=await (await worker.fetch(request(`/api/tasks/${id}`),f.env)).json();
+    assert.deepEqual(detail.events.map(e=>[e.status,e.note]),[['in_progress','Started'],['published','Verified live']]);
+    assert.equal(detail.task.schedule_external_id,'daily-post');assert.equal(detail.task.destination,'example.com');
+    assert.equal((await worker.fetch(request('/api/tasks/missing','PATCH',{status:'sent'}),f.env)).status,404);
+    assert.equal((await worker.fetch(request(`/api/tasks/${id}`,'PATCH',{status:'done'}),f.env)).status,400);
+    assert.equal((await worker.fetch(request(`/api/tasks/${id}`,'PATCH',{schedule_source:'cron-job'}),f.env)).status,400);
+    // schedules can be paused and removed through the API
+    await worker.fetch(request('/api/schedules','POST',{source:'codex',external_id:'daily-post',name:'Daily post',cadence_type:'rrule',cadence:'FREQ=DAILY;BYHOUR=10;BYMINUTE=0'}),f.env);
+    const sid=(await (await worker.fetch(request('/api/schedules'),f.env)).json()).schedules[0].id;
+    const paused=await (await worker.fetch(request(`/api/schedules/${sid}`,'PATCH',{enabled:false}),f.env)).json();
+    assert.equal(paused.schedule.enabled,false);assert.equal(paused.schedule.name,'Daily post');
+    assert.equal((await worker.fetch(request(`/api/schedules/${sid}`,'PATCH',{cadence:'; DROP'}),f.env)).status,400);
+    assert.equal((await worker.fetch(request(`/api/schedules/${sid}`,'DELETE',{}),f.env)).status,200);
+    assert.equal((await (await worker.fetch(request('/api/schedules'),f.env)).json()).schedules.length,0);
+  }finally{f.close();}
+});
+
+test('calendar helpers: month grid, CSV backfill and grouping stay pure and predictable',async()=>{
+  const {monthGrid,groupBy,plural,ymd}=await import('../public/calendar/format.js');
+  const {postLogToTasks,parseCsv}=await import('../public/calendar/csv.js');
+  const grid=monthGrid(new Date(2026,9,1));
+  assert.deepEqual([ymd(grid.start),grid.weeks,ymd(grid.end)],['2026-09-28',5,'2026-11-01']);
+  assert.equal(plural(1,'task'),'1 task');assert.equal(plural(2,'task'),'2 tasks');
+  assert.deepEqual([...groupBy([{d:'a'},{d:'b'},{d:'a'}],x=>x.d).keys()],['a','b']);
+  assert.deepEqual(parseCsv('a,"b, c","say ""hi"""\r\n1,2,3\n'),[['a','b, c','say "hi"'],['1','2','3']]);
+  const csv='date,game,destination,status,result_url,account,notes\n2026-10-23,Puliya,r/WebGames,published,https://reddit.com/x,me,"Posted, verified"\n2026-10-24,Yantra,Paizix,sent,,me,Pending\nnot-a-date,Bad,Row,sent,,,\n2026-10-25,Odd,Somewhere,unknown,,,';
+  const {tasks,skipped}=postLogToTasks(csv,'slayfit');
+  assert.equal(tasks.length,2);assert.equal(skipped.length,2);
+  assert.deepEqual([tasks[0].kind,tasks[0].notes,tasks[0].project],['post','Posted, verified','slayfit']);
+  assert.equal(tasks[1].external_ref,'csv|2026-10-24|Paizix|Yantra');
+  assert.throws(()=>postLogToTasks('a,b\n1,2','x'),/post-log/);
 });

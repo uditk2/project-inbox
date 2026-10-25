@@ -1,9 +1,10 @@
 import { send } from './send.js';
 import { syncAccount } from './sync.js';
 import { drafts } from './drafts.js';
-import { localRequest, HttpError, normalizeReceived, normalizeSent, publicAccount, resend, loadAccounts, encryptCredentials, validEmail } from './core.js';
+import { tasks } from './tasks.js';
+import { schedules } from './schedules.js';
+import { localRequest, HttpError, json, normalizeReceived, normalizeSent, publicAccount, resend, loadAccounts, encryptCredentials, validEmail } from './core.js';
 
-const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 const messageColumns = 'id,account_id,direction,sender,recipients,subject,substr(body_text,1,180) AS preview,received_at,is_read,archived,trashed,status';
 
 async function api(request, env, user) {
@@ -15,6 +16,8 @@ async function api(request, env, user) {
     const response = await drafts(request,env,configured,user);
     if (response) return response;
   }
+  if (url.pathname === '/api/tasks' || url.pathname.startsWith('/api/tasks/')) return tasks(request,env,user);
+  if (url.pathname.startsWith('/api/schedules')) { const response = await schedules(request,env,user); if (response) return response; }
   if (url.pathname === '/api/feedback' && request.method === 'POST') {
     const body=await request.json();
     if(typeof body.message!=='string' || !body.message.trim() || body.message.length>10000) throw new HttpError(400,'Write feedback of up to 10,000 characters');

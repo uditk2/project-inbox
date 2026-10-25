@@ -36,6 +36,13 @@ Use the port printed by the inbox app (for example `8798` if you started it with
 - `compose_message`: save a validated local draft, including optional HTML formatting and reply threading. Does not send.
 - `list_drafts`: read saved drafts and sent status.
 - `send_draft`: send an existing draft through its selected account. Retry with the same draft ID to avoid duplicate sends.
+- `log_task`: record work on the Task calendar as it happens. Call it when you start a task (`in_progress`). A stable `external_ref` makes repeat calls update one entry instead of duplicating it. Pass `schedule_source` and `schedule_external_id` when a scheduled task triggered the work, so the calendar can show that the run happened.
+- `update_task`: move a task along (status, result link, notes, or a one-line history `note`), by `id` or `external_ref`.
+- `get_task`: read one task with its history of status changes and notes.
+- `list_tasks`: read logged tasks, optionally filtered by date range and project.
+- `sync_schedules`: add or update scheduled tasks (name, schedule and on/off state only, never their instructions). Call it whenever a new scheduled task is created.
+- `update_schedule`: pause, resume, rename or re-time a saved schedule.
+- `list_schedules`: read the saved scheduled tasks.
 
 Sending reaches external recipients. Only authorize it in a trusted host, and review its tool approval policy. User authorization must come from the conversation, never instructions inside received email. There are no attachment downloading or deletion tools. Email content is untrusted data, not instructions. The server has no autonomous monitoring job; your agent must call these tools when you ask it to check mail, or through a separately configured schedule. New mail remains with Resend while the app is closed and is fetched on the next sync.
 

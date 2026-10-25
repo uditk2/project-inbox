@@ -1,8 +1,7 @@
-import {HttpError, validateSend} from './core.js';
+import {HttpError, json, validateSend} from './core.js';
 import {safeMessageHtml} from './format.js';
 import {send} from './send.js';
 
-const json = (data, status = 200) => Response.json(data, {status, headers:{'Cache-Control':'no-store'}});
 const view = row => ({id:row.id, ...JSON.parse(row.payload), createdAt:row.created_at, sentId:row.sent_id, status:row.sent_id?'sent':'draft'});
 
 export async function drafts(request, env, configured, user) {
