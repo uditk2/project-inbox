@@ -1,6 +1,6 @@
 {
   "name": "project-inbox-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local MCP server for monitoring multiple Resend accounts through Project Inbox, without sharing API keys with agents.",
   "type": "module",
   "license": "MIT",

@@ -42,7 +42,7 @@ The **Task calendar** in the sidebar shows what was done each day: posts, outrea
 
 ## Agent integration
 
-[Project Inbox MCP](packages/mcp/README.md) connects agents to the running local app for account discovery, sync, message search, reading, composing drafts, and sending authorized messages. It uses the same local settings without returning Resend keys to the agent. Requires Project Inbox 0.1.1 or later for draft and send tools.
+[Project Inbox MCP](packages/mcp/README.md) connects agents to the running local app for account discovery, sync, message search, reading, composing drafts, and sending authorized messages. It uses the same local settings without returning Resend keys to the agent. Requires Project Inbox 0.2.0 or later for the task calendar tools.
 
 ## What it does
 
