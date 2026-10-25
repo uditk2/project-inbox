@@ -12,8 +12,15 @@ import { demoAccounts, seedDemo } from '../src/demo.js';
 
 const args = process.argv.slice(2);
 if (args.includes('--help')) {
-  console.log('Project Inbox\n\nproject-inbox                 Open your local inbox\nproject-inbox --demo          Sample inbox (no real email)\nproject-inbox --port 8787      Choose a port\nproject-inbox --no-open        Do not open the browser\n\nNode.js 22.16+ required. Resend receiving must be enabled on each mail domain.');
+  console.log('Project Inbox\n\nproject-inbox                 Open your local inbox\nproject-inbox setup           Connect your AI tools (Claude, Codex), then open your inbox\nproject-inbox setup --yes     Same, without asking questions\nproject-inbox setup --for codex     Only some tools: claude, claude-code, claude-desktop, codex\nproject-inbox --demo          Sample inbox (no real email)\nproject-inbox --port 8787      Choose a port\nproject-inbox --no-open        Do not open the browser\n\nNode.js 22.16+ required. Resend receiving must be enabled on each mail domain.');
   process.exit(0);
+}
+if (args[0] === 'setup') {
+  const { runSetup, parseTargets } = await import('../src/setup.js');
+  const forArg = args.indexOf('--for');
+  let only;
+  try { only = parseTargets(forArg >= 0 ? args[forArg+1] : null); } catch (error) { console.error(error.message); process.exit(1); }
+  await runSetup({ yes: args.includes('--yes'), only });
 }
 // Optional local configuration. Never included in the public package.
 try { process.loadEnvFile(resolve('.env')); } catch (e) { if (e.code !== 'ENOENT') throw e; }

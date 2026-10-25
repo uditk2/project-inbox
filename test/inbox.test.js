@@ -243,3 +243,63 @@ test('calendar helpers: month grid, CSV backfill and grouping stay pure and pred
   assert.equal(tasks[1].external_ref,'csv|2026-10-24|Paizix|Yantra');
   assert.throws(()=>postLogToTasks('a,b\n1,2','x'),/post-log/);
 });
+
+test('setup adds the MCP server to a desktop config without touching other entries', async () => {
+  const { withServer, desktopConfigPath } = await import('../src/setup.js');
+  const added = JSON.parse(withServer('{"theme":"dark","mcpServers":{"other":{"command":"x"}}}'));
+  assert.deepEqual(added.mcpServers['project-inbox'], { command: 'npx', args: ['--yes', 'project-inbox-mcp'] });
+  assert.equal(added.mcpServers.other.command, 'x');
+  assert.equal(added.theme, 'dark');
+  assert.ok(JSON.parse(withServer('')).mcpServers['project-inbox']);
+  assert.equal(withServer(JSON.stringify(added)), null);
+  assert.throws(() => withServer('[]'));
+  assert.throws(() => withServer('{"mcpServers":[]}'));
+  assert.throws(() => withServer('not json'));
+  assert.match(desktopConfigPath({ platform: 'darwin', home: '/h' }), /Library\/Application Support\/Claude/);
+  assert.match(desktopConfigPath({ platform: 'win32', home: '/h', env: { APPDATA: '/a' } }), /Claude/);
+});
+
+test('setup registers each tool once, asks first, and reports what it did', async () => {
+  const { runSetup } = await import('../src/setup.js');
+  const { mkdtempSync, readFileSync, existsSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = mkdtempSync(join(tmpdir(), 'pi-setup-'));
+  const desktop = join(dir, 'claude_desktop_config.json');
+  writeFileSync(desktop, '{"mcpServers":{"keep":{"command":"y"}}}');
+  const calls = [];
+  const exec = async (bin, args) => {
+    calls.push([bin, ...args].join(' '));
+    if (bin === 'codex') throw Object.assign(new Error('not installed'), { code: 'ENOENT' });
+    return { stdout: args[0] === 'mcp' && args[1] === 'list' ? 'other: npx x' : 'ok' };
+  };
+  const asked = [];
+  const log = () => {};
+  let results = await runSetup({ exec, files: { desktop }, log, ask: async q => { asked.push(q); return !q.includes('Desktop'); } });
+  assert.deepEqual(results, { 'Claude Code': 'added', Codex: 'missing', 'Claude Desktop': 'skipped' });
+  assert.ok(calls.includes('claude mcp add --scope user project-inbox -- npx --yes project-inbox-mcp'));
+  assert.ok(!existsSync(`${desktop}.bak`));
+  results = await runSetup({ yes: true, exec, files: { desktop }, log, ask: async () => { throw new Error('should not ask'); } });
+  assert.equal(results['Claude Desktop'], 'added');
+  const saved = JSON.parse(readFileSync(desktop, 'utf8'));
+  assert.ok(saved.mcpServers['project-inbox'] && saved.mcpServers.keep);
+  assert.ok(existsSync(`${desktop}.bak`));
+  results = await runSetup({ yes: true, exec, files: { desktop }, log });
+  assert.equal(results['Claude Desktop'], 'done');
+  const listed = async (bin, args) => ({ stdout: args[1] === 'list' ? 'project-inbox: npx --yes project-inbox-mcp' : '' });
+  assert.equal((await runSetup({ yes: true, exec: listed, files: { desktop }, log }))['Claude Code'], 'done');
+});
+
+test('setup can be limited to chosen tools', async () => {
+  const { runSetup, parseTargets } = await import('../src/setup.js');
+  assert.equal(parseTargets(''), null);
+  assert.deepEqual(parseTargets('codex'), ['codex']);
+  assert.deepEqual(parseTargets('claude').sort(), ['claude-code', 'claude-desktop']);
+  assert.equal(parseTargets('all').length, 3);
+  assert.throws(() => parseTargets('cursor'), /Unknown tool/);
+  const calls = [];
+  const exec = async (bin, args) => { calls.push(bin); return { stdout: '' }; };
+  const results = await runSetup({ only: ['codex'], exec, log: () => {}, files: { desktop: '/nonexistent/dir/x.json' }, ask: async () => { throw new Error('should not ask'); } });
+  assert.deepEqual(results, { Codex: 'added' });
+  assert.ok(calls.every(bin => bin === 'codex'));
+});

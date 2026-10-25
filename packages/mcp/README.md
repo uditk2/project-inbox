@@ -10,7 +10,9 @@ Requires Node 22.16 or newer:
 npx --yes project-inbox
 ```
 
-Add your Resend accounts in Settings. Then configure your MCP client:
+Add your Resend accounts in Settings. Then connect your MCP client.
+
+The quickest way is `npx --yes project-inbox setup`, which adds this to Claude Code, Codex and Claude Desktop for you. To do it by hand, add this to your MCP host's config:
 
 ```json
 {

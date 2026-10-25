@@ -24,6 +24,18 @@ The demo uses sample messages in memory and cannot send or save real credentials
 
 The client is published on npm. Source is also available from GitHub.
 
+## Set up everything with one command
+
+Project Inbox is two small npm packages: the **app** (`project-inbox`, your inbox and calendar) and the **MCP server** (`project-inbox-mcp`, which lets Claude and Codex use it). You never install either globally. One command connects your AI tools and opens the app:
+
+```sh
+npx --yes project-inbox setup
+```
+
+It looks for Claude Code, Codex and Claude Desktop on your computer, asks before adding Project Inbox to each one, and then starts the app as usual. Choose specific tools with `--for`, for example `--for codex` or `--for claude` (Claude Code and Claude Desktop), or add `--yes` to skip the questions. Tools that already have it are left alone, and Claude Desktop's config is backed up first. Restart a tool after it is added.
+
+Day to day, start the app with `npx --yes project-inbox` and keep it running, since the MCP server talks to it. The MCP finds the app by itself on the default port 8787, or on any port you chose with `--port`. To set it up by hand, see the [MCP README](packages/mcp/README.md).
+
 ## Task calendar
 
 The **Task calendar** in the sidebar shows what was done each day: posts, outreach emails, listings and profiles, each with a status (planned, drafted, sent, published, backlink verified, withdrawn, failed), the destination, a result link and notes. Entries live in the same local SQLite database as your mail. Use **Import post-log.csv** to backfill from a CSV with the columns `date, game, destination, status, result_url, account, notes`; importing the same file again updates entries instead of duplicating them. Agents record work as it happens through the MCP `log_task` and `update_task` tools, and each task keeps a timestamped history. Scheduled tasks can be imported from Codex (opt-in, names and schedules only) or saved by Claude through `sync_schedules`; a scheduled day shows whether a run was logged for it.
