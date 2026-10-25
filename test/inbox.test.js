@@ -255,8 +255,8 @@ test('setup adds the MCP server to a desktop config without touching other entri
   assert.throws(() => withServer('[]'));
   assert.throws(() => withServer('{"mcpServers":[]}'));
   assert.throws(() => withServer('not json'));
-  assert.match(desktopConfigPath({ platform: 'darwin', home: '/h' }), /Library\/Application Support\/Claude/);
-  assert.match(desktopConfigPath({ platform: 'win32', home: '/h', env: { APPDATA: '/a' } }), /Claude/);
+  assert.match(desktopConfigPath({ platform: 'darwin', home: '/h' }), /Library[\\/]Application Support[\\/]Claude/);
+  assert.match(desktopConfigPath({ platform: 'win32', home: '/h', env: { APPDATA: '/a' } }), /Claude[\\/]claude_desktop_config\.json$/);
 });
 
 test('setup registers each tool once, asks first, and reports what it did', async () => {
