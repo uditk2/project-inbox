@@ -32,7 +32,7 @@ Project Inbox is two small npm packages: the **app** (`project-inbox`, your inbo
 npx --yes project-inbox setup
 ```
 
-It looks for Claude Code, Codex and Claude Desktop on your computer, asks before adding Project Inbox to each one, and then starts the app as usual. Choose specific tools with `--for`, for example `--for codex` or `--for claude` (Claude Code and Claude Desktop), or add `--yes` to skip the questions. Tools that already have it are left alone, and Claude Desktop's config is backed up first. Restart a tool after it is added.
+It looks for Claude Code, Codex and Claude Desktop on your computer, asks before adding Project Inbox to each one, and then starts the app as usual. If Project Inbox is already running on that port, it says so and reuses it instead of failing. Choose specific tools with `--for`, for example `--for codex` or `--for claude` (Claude Code and Claude Desktop), or add `--yes` to skip the questions. Tools that already have it are left alone, and Claude Desktop's config is backed up first. Restart a tool after it is added.
 
 Day to day, start the app with `npx --yes project-inbox` and keep it running, since the MCP server talks to it. The MCP finds the app by itself on the default port 8787, or on any port you chose with `--port`. To set it up by hand, see the [MCP README](packages/mcp/README.md).
 
