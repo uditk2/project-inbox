@@ -77,5 +77,18 @@ server.listen(port,'127.0.0.1',async()=>{
     execFile(command,values,error=>{if(error) console.log('Open the address above in your browser.');});
   }
 });
-server.on('error',error=>{console.error(error.code === 'EADDRINUSE'?'Port is in use. Choose another with --port.':'Could not start server.');process.exitCode=1;db.close();});
+// Another Project Inbox already on this port is not an error: reuse it. Only a different program on the port is.
+const projectInboxRunning = async () => {
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/session`,{redirect:'error',signal:AbortSignal.timeout(2000),headers:{Accept:'application/json'}});
+    const body = await response.json();
+    return response.ok && Array.isArray(body.accounts) && typeof body.demo === 'boolean';
+  } catch { return false; }
+};
+server.on('error',async error=>{
+  db.close();
+  if (error.code === 'EADDRINUSE' && await projectInboxRunning()) { console.log(`Project Inbox is already running at http://localhost:${port}. Using that one.`); return; }
+  console.error(error.code === 'EADDRINUSE'?'Port is in use by another program. Choose another with --port.':'Could not start server.');
+  process.exitCode=1;
+});
 for (const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>server.close(async()=>{if(!demo) await forget();db.close();process.exit(0);}));
