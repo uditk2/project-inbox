@@ -11,13 +11,23 @@ const run = promisify(execFile);
 export const NAME = 'project-inbox';
 export const MCP_COMMAND = ['npx', '--yes', 'project-inbox-mcp'];
 
+// A hosted Project Inbox (Cloudflare Worker) is reached over https with a token, through the same npx MCP server.
+export function hostedEnv(url, token) {
+  let origin;
+  try { origin = new URL(url); } catch { throw new Error('The hosted address must look like https://inbox.example.com'); }
+  if (origin.protocol !== 'https:' || origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash) throw new Error('The hosted address must be an https origin such as https://inbox.example.com, with no path.');
+  if (typeof token !== 'string' || token.length < 32) throw new Error('Set PROJECT_INBOX_TOKEN to the hosted access token (at least 32 characters).');
+  return { PROJECT_INBOX_URL: origin.origin, PROJECT_INBOX_TOKEN: token };
+}
+
 // Adds the server to a Claude Desktop style config (JSON with an mcpServers map), keeping everything else.
-export function withServer(text) {
+// `env` is set only for a hosted app: it tells the MCP server where the app is and how to sign in.
+export function withServer(text, env = null) {
   const config = text.trim() ? JSON.parse(text) : {};
   if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('Unexpected config format');
   if (config.mcpServers && (typeof config.mcpServers !== 'object' || Array.isArray(config.mcpServers))) throw new Error('Unexpected mcpServers format');
   if (config.mcpServers?.[NAME]) return null;
-  config.mcpServers = { ...config.mcpServers, [NAME]: { command: MCP_COMMAND[0], args: MCP_COMMAND.slice(1) } };
+  config.mcpServers = { ...config.mcpServers, [NAME]: { command: MCP_COMMAND[0], args: MCP_COMMAND.slice(1), ...(env ? { env } : {}) } };
   return `${JSON.stringify(config, null, 2)}\n`;
 }
 
@@ -29,8 +39,8 @@ export function desktopConfigPath({ platform = process.platform, home = homedir(
 
 const exists = path => access(path).then(() => true, () => false);
 
-// A client with its own `mcp add` command (Claude Code, Codex).
-const cliClient = (key, label, bin, addArgs) => ({
+// A client with its own `mcp add` command (Claude Code, Codex). Both take environment variables as repeated flags.
+const cliClient = (key, label, bin, addArgs, envFlag) => ({
   key, label,
   async check({ exec }) {
     try { await exec(bin, ['--version']); } catch { return 'missing'; }
@@ -40,7 +50,7 @@ const cliClient = (key, label, bin, addArgs) => ({
     } catch { /* listing is best effort; try to add */ }
     return 'ready';
   },
-  install: ({ exec }) => exec(bin, [...addArgs, NAME, '--', ...MCP_COMMAND])
+  install: ({ exec, env }) => exec(bin, [...addArgs, ...Object.entries(env || {}).flatMap(([name, value]) => [envFlag, `${name}=${value}`]), NAME, '--', ...MCP_COMMAND])
 });
 
 const desktopClient = {
@@ -52,18 +62,18 @@ const desktopClient = {
     try { return withServer(await readFile(path, 'utf8')) === null ? 'done' : 'ready'; }
     catch (error) { return error.code === 'ENOENT' ? 'ready' : 'unreadable'; }
   },
-  async install({ files }) {
+  async install({ files, env }) {
     const path = files.desktop;
     let text = '';
     try { text = await readFile(path, 'utf8'); await copyFile(path, `${path}.bak`); } catch (error) { if (error.code !== 'ENOENT') throw error; }
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, withServer(text));
+    await writeFile(path, withServer(text, env));
   }
 };
 
 export const clients = [
-  cliClient('claude-code', 'Claude Code', 'claude', ['mcp', 'add', '--scope', 'user']),
-  cliClient('codex', 'Codex', 'codex', ['mcp', 'add']),
+  cliClient('claude-code', 'Claude Code', 'claude', ['mcp', 'add', '--scope', 'user'], '-e'),
+  cliClient('codex', 'Codex', 'codex', ['mcp', 'add'], '--env'),
   desktopClient
 ];
 
@@ -85,15 +95,20 @@ export async function askYesNo(question) {
 }
 
 // Returns a result per client: done (already set up), added, skipped, missing, failed, unreadable.
-export async function runSetup({ yes = false, only = null, ask = askYesNo, log = console.log, exec = run, files = { desktop: desktopConfigPath() }, list = clients } = {}) {
-  const context = { exec, files };
+// With `remote` ({url, token}) the tools are pointed at a hosted app instead of the local one.
+export async function runSetup({ yes = false, only = null, remote = null, ask = askYesNo, log = console.log, exec = run, files = { desktop: desktopConfigPath() }, list = clients } = {}) {
+  const env = remote ? hostedEnv(remote.url, remote.token) : null;
+  const context = { exec, files, env };
   const results = {};
   for (const client of list.filter(c => !only || only.includes(c.key))) {
     const state = await client.check(context);
     if (state === 'missing') { results[client.label] = 'missing'; continue; }
     if (state === 'unreadable') { log(`${client.label}: could not read its config, so I left it alone.`); results[client.label] = 'unreadable'; continue; }
-    if (state === 'done') { log(`${client.label}: already set up.`); results[client.label] = 'done'; continue; }
-    if (!yes && !only && !(await ask(`Add Project Inbox to ${client.label}?`))) { results[client.label] = 'skipped'; continue; }
+    if (state === 'done') {
+      log(`${client.label}: already set up.${env ? ' To point it at the hosted app, remove the existing "project-inbox" entry first and run this again.' : ''}`);
+      results[client.label] = 'done'; continue;
+    }
+    if (!yes && !only && !(await ask(`Add Project Inbox${env ? ` (hosted at ${env.PROJECT_INBOX_URL})` : ''} to ${client.label}?`))) { results[client.label] = 'skipped'; continue; }
     try { await client.install(context); log(`${client.label}: added. Restart it to pick up the new tool.`); results[client.label] = 'added'; }
     catch { log(`${client.label}: could not add it automatically.`); results[client.label] = 'failed'; }
   }
