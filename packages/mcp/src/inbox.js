@@ -13,6 +13,15 @@ export function localOrigin(value = 'http://127.0.0.1:8787') {
   return url.origin;
 }
 
+// A hosted Project Inbox (Cloudflare Worker) is reached over https, only together with its access token.
+export function remoteOrigin(value) {
+  const url = new URL(value);
+  if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('PROJECT_INBOX_URL for a hosted app must be an https origin, such as https://inbox.example.com');
+  }
+  return url.origin;
+}
+
 // The running app records its address here so the MCP can find it when it was started on a non-default port.
 export function discoveredUrl(dataDir = process.env.DATA_DIR || join(homedir(), '.project-inbox')) {
   try {
@@ -23,9 +32,12 @@ export function discoveredUrl(dataDir = process.env.DATA_DIR || join(homedir(), 
 }
 
 // Order: PROJECT_INBOX_URL, then the running app's address, then the default port 8787.
+// With a token, PROJECT_INBOX_URL is a hosted app and every request carries the token as a bearer credential.
 export class InboxClient {
-  constructor(value, request = fetch, discover = discoveredUrl) {
-    this.configured = value ? localOrigin(value) : null;
+  constructor(value, request = fetch, discover = discoveredUrl, token = null) {
+    this.token = token || null;
+    if (this.token && !value) throw new Error('PROJECT_INBOX_TOKEN needs PROJECT_INBOX_URL, the https address of your hosted Project Inbox.');
+    this.configured = value ? (this.token ? remoteOrigin(value) : localOrigin(value)) : null;
     this.discover = discover;
     this.request = request;
   }
@@ -37,11 +49,16 @@ export class InboxClient {
     try {
       response = await this.request(`${origin}${path}`, {
         method, redirect: 'error', signal: AbortSignal.timeout(60000),
-        headers: { Accept: 'application/json', ...(body ? { Origin: origin, 'Content-Type': 'application/json' } : {}) },
+        headers: { Accept: 'application/json', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}), ...(body ? { Origin: origin, 'Content-Type': 'application/json' } : {}) },
         ...(body ? { body: JSON.stringify(body) } : {})
       });
-    } catch { throw new Error('Cannot connect to Project Inbox. Start Project Inbox (default port 8787), or set PROJECT_INBOX_URL.'); }
-    if (!response.ok) throw new Error(`Project Inbox request failed (${response.status}). Check the local app.`);
+    } catch { throw new Error(this.token ? 'Cannot connect to the hosted Project Inbox. Check PROJECT_INBOX_URL and your connection.' : 'Cannot connect to Project Inbox. Start Project Inbox (default port 8787), or set PROJECT_INBOX_URL.'); }
+    if (response.status === 401 && this.token) throw new Error('The hosted Project Inbox rejected PROJECT_INBOX_TOKEN. Check the token.');
+    if (!response.ok) {
+      // The app's own error text is written for people and never contains secrets, so pass it on.
+      const detail = await response.json().then(body => (typeof body?.error === 'string' ? body.error : ''), () => '');
+      throw new Error(`Project Inbox request failed (${response.status}).${detail ? ` ${detail}` : this.token ? ' Check the hosted app.' : ' Check the local app.'}`);
+    }
     return response.json();
   }
 

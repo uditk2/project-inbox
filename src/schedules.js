@@ -7,6 +7,7 @@ const MAX_BATCH = 100;
 
 async function scan(request, env, user) {
   denyDemo(user, 'read local schedules');
+  if (env.HOSTED === 'true') throw new HttpError(400, 'The hosted app cannot read files on your computer. Run "npx project-inbox push-schedules" on that computer instead.');
   const sources = (await request.json())?.sources;
   if (!Array.isArray(sources) || !sources.length || sources.some(s => s !== 'codex')) throw new HttpError(400, 'Choose a supported source: codex');
   const {scanCodex} = await import('./scan.js');   // Node-only code, loaded only when the user asks for an import

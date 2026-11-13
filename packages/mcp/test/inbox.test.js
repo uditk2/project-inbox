@@ -56,3 +56,24 @@ test('discovery ignores stale, foreign and malformed files', async () => {
   write('not json');
   assert.equal(discoveredUrl(dir), null);
 });
+
+test('a hosted app needs https plus a token, sends the token, and reports its error text', async () => {
+  const { remoteOrigin } = await import('../src/inbox.js');
+  for (const url of ['http://inbox.example.com','https://user:pass@inbox.example.com','https://inbox.example.com/path','https://inbox.example.com/?x=1']) assert.throws(() => remoteOrigin(url));
+  assert.equal(remoteOrigin('https://inbox.example.com'), 'https://inbox.example.com');
+  assert.throws(() => new InboxClient(undefined, fetch, () => null, 'a-token'), /PROJECT_INBOX_URL/);
+  assert.throws(() => new InboxClient('https://inbox.example.com', fetch, () => null), /loopback/);
+  const seen = [];
+  const client = new InboxClient('https://inbox.example.com', async (url, options) => {
+    seen.push([url, options.headers.Authorization]);
+    if (url.endsWith('/api/session')) return Response.json({accounts:[{id:'a',name:'A',mailbox:'a@example.com'}],demo:false});
+    if (url.endsWith('/api/sync')) return Response.json({error:'Mail provider is busy. Please retry shortly.'}, {status:429});
+    return Response.json({error:'nope'}, {status:401});
+  }, () => null, 'secret-token');
+  assert.equal((await client.accounts()).accounts[0].id, 'a');
+  assert.deepEqual(seen[0], ['https://inbox.example.com/api/session', 'Bearer secret-token']);
+  await assert.rejects(client.sync('a'), /429.*busy/);
+  await assert.rejects(client.tasks(), /rejected PROJECT_INBOX_TOKEN/);
+  const down = new InboxClient('https://inbox.example.com', async () => { throw new Error('boom secret-token'); }, () => null, 'secret-token');
+  await assert.rejects(down.accounts(), err => /hosted Project Inbox/.test(err.message) && !err.message.includes('secret-token'));
+});

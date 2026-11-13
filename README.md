@@ -36,6 +36,10 @@ It looks for Claude Code, Codex and Claude Desktop on your computer, asks before
 
 Day to day, start the app with `npx --yes project-inbox` and keep it running, since the MCP server talks to it. The MCP finds the app by itself on the default port 8787, or on any port you chose with `--port`. To set it up by hand, see the [MCP README](packages/mcp/README.md).
 
+## Run it on Cloudflare instead
+
+Prefer not to keep anything running on your computer? Project Inbox can also run as a Cloudflare Worker with a D1 database, a Resend webhook, and a hosted MCP endpoint. It is an extra target, not a replacement, and it changes the trust model: your mail and keys then live in your Cloudflare account. See [docs/cloudflare.md](docs/cloudflare.md).
+
 ## Task calendar
 
 The **Task calendar** in the sidebar shows what was done each day: posts, outreach emails, listings and profiles, each with a status (planned, drafted, sent, published, backlink verified, withdrawn, failed), the destination, a result link and notes. Entries live in the same local SQLite database as your mail. Use **Import post-log.csv** to backfill from a CSV with the columns `date, game, destination, status, result_url, account, notes`; importing the same file again updates entries instead of duplicating them. Agents record work as it happens through the MCP `log_task` and `update_task` tools, and each task keeps a timestamped history. Scheduled tasks can be imported from Codex (opt-in, names and schedules only) or saved by Claude through `sync_schedules`; a scheduled day shows whether a run was logged for it.

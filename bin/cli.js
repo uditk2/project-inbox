@@ -12,7 +12,7 @@ import { demoAccounts, seedDemo } from '../src/demo.js';
 
 const args = process.argv.slice(2);
 if (args.includes('--help')) {
-  console.log('Project Inbox\n\nproject-inbox                 Open your local inbox\nproject-inbox setup           Connect your AI tools (Claude, Codex), then open your inbox\nproject-inbox setup --yes     Same, without asking questions\nproject-inbox setup --for codex     Only some tools: claude, claude-code, claude-desktop, codex\nproject-inbox --demo          Sample inbox (no real email)\nproject-inbox --port 8787      Choose a port\nproject-inbox --no-open        Do not open the browser\n\nNode.js 22.16+ required. Resend receiving must be enabled on each mail domain.');
+  console.log('Project Inbox\n\nproject-inbox                 Open your local inbox\nproject-inbox setup           Connect your AI tools (Claude, Codex), then open your inbox\nproject-inbox setup --yes     Same, without asking questions\nproject-inbox setup --for codex     Only some tools: claude, claude-code, claude-desktop, codex\nproject-inbox setup --remote https://inbox.example.com     Point your AI tools at a hosted Project Inbox (token in PROJECT_INBOX_TOKEN)\nproject-inbox push-schedules --remote https://inbox.example.com   Send this computer\'s Codex schedules to a hosted inbox\nproject-inbox export-sql [--out inbox.sql]   Export your local data for a hosted inbox (Cloudflare D1)\nproject-inbox --demo          Sample inbox (no real email)\nproject-inbox --port 8787      Choose a port\nproject-inbox --no-open        Do not open the browser\n\nNode.js 22.16+ required. Resend receiving must be enabled on each mail domain.');
   process.exit(0);
 }
 if (args[0] === 'setup') {
@@ -20,7 +20,27 @@ if (args[0] === 'setup') {
   const forArg = args.indexOf('--for');
   let only;
   try { only = parseTargets(forArg >= 0 ? args[forArg+1] : null); } catch (error) { console.error(error.message); process.exit(1); }
-  await runSetup({ yes: args.includes('--yes'), only });
+  const remoteArg = args.indexOf('--remote');
+  const remote = remoteArg >= 0 ? { url: args[remoteArg+1], token: process.env.PROJECT_INBOX_TOKEN } : null;
+  try { await runSetup({ yes: args.includes('--yes'), only, remote }); } catch (error) { console.error(error.message); process.exit(1); }
+  if (remote) process.exit(0);   // a hosted inbox needs no local app
+}
+if (args[0] === 'push-schedules' || args[0] === 'export-sql') {
+  const option = name => { const i = args.indexOf(name); return i >= 0 ? args[i+1] : undefined; };
+  try {
+    if (args[0] === 'push-schedules') {
+      const { pushSchedules } = await import('../src/remote.js');
+      await pushSchedules({ url: option('--remote'), token: process.env.PROJECT_INBOX_TOKEN, log: console.log });
+    } else {
+      const { exportSql } = await import('../src/remote.js');
+      const source = join(process.env.DATA_DIR || join(homedir(),'.project-inbox'),'inbox.sqlite');
+      const { sql, counts } = exportSql(source);
+      const out = option('--out') || 'inbox.sql';
+      await writeFile(out, sql, { mode: 0o600 });
+      console.log(`Wrote ${out}. Rows: ${Object.entries(counts).map(([table, n]) => `${table} ${n}`).join(', ')}.\nIt contains your mail and encrypted account keys, so keep it private and delete it after loading it.`);
+    }
+  } catch (error) { console.error(error.code === 'ERR_SQLITE_ERROR' ? 'Could not read the local Project Inbox database.' : error.message); process.exit(1); }
+  process.exit(0);
 }
 // Optional local configuration. Never included in the public package.
 try { process.loadEnvFile(resolve('.env')); } catch (e) { if (e.code !== 'ENOENT') throw e; }

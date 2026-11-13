@@ -7,7 +7,7 @@ import { localRequest, HttpError, json, normalizeReceived, normalizeSent, public
 
 const messageColumns = 'id,account_id,direction,sender,recipients,subject,substr(body_text,1,180) AS preview,received_at,is_read,archived,trashed,status';
 
-async function api(request, env, user) {
+export async function api(request, env, user) {
   const url = new URL(request.url);
   const configured = await loadAccounts(env);
   if (url.pathname === '/api/session' && request.method === 'GET') return json({ email: user.email, demo: user.demo, accounts: configured.map(publicAccount), settingsAvailable:true });
@@ -37,7 +37,10 @@ async function api(request, env, user) {
     const previous = configured.find(a=>a.id===input.id);
     const apiKey = input.apiKey || previous?.apiKey;
     if (typeof apiKey!=='string' || !apiKey.startsWith('re_') || apiKey.length>512) throw new HttpError(400,'Enter a Resend API key');
-    const encrypted = await encryptCredentials(env,input.id,{apiKey});
+    // Only the hosted app receives webhooks. Blank keeps the saved secret, like the API key.
+    const webhookSecret = input.webhookSecret || previous?.webhookSecret;
+    if (webhookSecret !== undefined && (typeof webhookSecret!=='string' || !/^whsec_[A-Za-z0-9+/=]{8,256}$/.test(webhookSecret))) throw new HttpError(400,'Enter the Resend webhook signing secret, which starts with whsec_');
+    const encrypted = await encryptCredentials(env,input.id,{apiKey,...(webhookSecret?{webhookSecret}:{})});
     await env.DB.prepare('INSERT INTO mail_accounts VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,mailbox=excluded.mailbox,encrypted_credentials=excluded.encrypted_credentials,updated_at=excluded.updated_at').bind(input.id,input.name.trim(),input.mailbox.toLowerCase(),encrypted,new Date().toISOString()).run();
     return json({account:publicAccount(input)});
   }
@@ -115,6 +118,23 @@ async function api(request, env, user) {
   throw new HttpError(404, 'Not found');
 }
 
+const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self' about:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+export function secureHeaders(headers) {
+  headers.set('Content-Security-Policy', CSP);
+  headers.set('X-Content-Type-Options','nosniff');
+  headers.set('Referrer-Policy','no-referrer');
+  return headers;
+}
+// Serves the browser app from the static assets binding with the security headers every page needs.
+export async function servePublic(request, env) {
+  const response = await env.ASSETS.fetch(request);
+  return new Response(response.body,{status:response.status,headers:secureHeaders(new Headers(response.headers))});
+}
+export function errorResponse(e) {
+  if (e instanceof SyntaxError) return json({error:'Invalid JSON configuration or request'},400);
+  return json({error:e instanceof HttpError ? e.message : 'Request could not be completed. Check server configuration.'},e instanceof HttpError ? e.status : 500);
+}
+
 export default {
   async fetch(request, env) {
     try {
@@ -128,15 +148,9 @@ export default {
         }
         return await api(request,env,user);
       }
-      const response = await env.ASSETS.fetch(request);
-      const headers = new Headers(response.headers);
-      headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self' about:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
-      headers.set('X-Content-Type-Options','nosniff');
-      headers.set('Referrer-Policy','no-referrer');
-      return new Response(response.body,{status:response.status,headers});
+      return await servePublic(request,env);
     } catch (e) {
-      if (e instanceof SyntaxError) return json({error:'Invalid JSON configuration or request'},400);
-      return json({error:e instanceof HttpError ? e.message : 'Request could not be completed. Check server configuration.'},e instanceof HttpError ? e.status : 500);
+      return errorResponse(e);
     }
   }
 };
