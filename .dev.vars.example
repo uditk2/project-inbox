@@ -1,0 +1,6 @@
+# Copy to .dev.vars for `npx wrangler dev --local`. Never commit .dev.vars.
+INBOX_TOKEN=change-me-to-at-least-32-random-characters
+CREDENTIALS_KEY=change-me-to-at-least-32-random-characters
+# Optional: accounts can also be added in Settings after signing in.
+# MAIL_ACCOUNTS_JSON=[{"id":"studio","name":"Studio","mailbox":"hello@studio.example","apiKey":"re_..."}]
+# WEBHOOK_SECRETS_JSON={"studio":"whsec_..."}
