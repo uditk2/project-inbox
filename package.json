@@ -13,6 +13,9 @@
   "files": [
     "bin",
     "src",
+    "!src/worker.js",
+    "!src/hosted.js",
+    "!src/mcp-http.js",
     "public",
     "migrations",
     "README.md",
@@ -46,5 +49,9 @@
   "homepage": "https://github.com/uditk2/project-inbox#readme",
   "bugs": {
     "url": "https://github.com/uditk2/project-inbox/issues"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
   }
 }
