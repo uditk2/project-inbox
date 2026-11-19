@@ -36,3 +36,17 @@ test('exported accounts decrypt on the hosted side with the same CREDENTIALS_KEY
     } finally { hosted.close(); }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('--only limits the export, and messages replace rows already in D1', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pi-export-'));
+  try {
+    const path = join(dir, 'local.sqlite');
+    const db = openDatabase(path, migrations);
+    await db.prepare("INSERT INTO messages (id,account_id,provider_id,direction,sender,recipients,subject,received_at,is_read) VALUES ('a:in:1','a','1','inbound','x@y.z','[]','Hello','2026-01-01',1)").run();
+    await db.prepare("INSERT INTO tasks (id,task_date,title,created_at,updated_at) VALUES ('t','2026-01-01','T','a','b')").run();
+    db.close();
+    const out = spawnSync(process.execPath, ['--no-warnings', script, '--db', path, '--only', 'messages'], { encoding: 'utf8' }).stdout;
+    assert.match(out, /^INSERT OR REPLACE INTO messages /);
+    assert.ok(!out.includes('INTO tasks'));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
