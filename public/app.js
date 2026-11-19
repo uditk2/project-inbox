@@ -1,5 +1,6 @@
 'use strict';
 const $ = (id) => document.getElementById(id);
+const L = s => state.hosted ? s.replaceAll('on this Mac', 'in your Cloudflare database').replace('Runs in your Cloudflare database. No login, cloud account, or personal inbox access needed.', 'Hosted on Cloudflare. Only the Google accounts you allow can sign in.').replace('Runs on your Mac. No login, cloud account, or personal inbox access needed.', 'Hosted on Cloudflare. Only the Google accounts you allow can sign in.') : s;
 const state = { accounts: [], folder: 'inbox', account: '', query: '', messages: [], selected: null, offset: 0, demo: false, ready: false, loading: false, requestId: null, replyToId: null, seen: new Set(), initialized: false, generation: 0 };
 const el = (tag, className, text) => { const n = document.createElement(tag); if (className) n.className = className; if (text != null) n.textContent = text; return n; };
 function notice(text) { $('notice').textContent = text || ''; $('notice').hidden = !text; }
@@ -32,7 +33,7 @@ document.querySelectorAll('[data-folder]').forEach(b => { b.onclick = () => { st
 let searchTimer; $('search').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.query = $('search').value.trim(); loadMessages(); }, 250); }; $('refresh').onclick = () => { notice(''); refreshWorkspace(); }; $('load-more').onclick = () => loadMessages({ append: true });
 $('notifications').onclick = async () => { if (!('Notification' in window)) { notice('Desktop notifications are not supported by this browser.'); return; } const permission = await Notification.requestPermission(); $('notifications').textContent = permission === 'granted' ? '✓ Notifications enabled' : '♧ Notifications unavailable'; if (permission !== 'granted') notice('You can enable notifications for this site in your browser settings.'); };
 document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); $('search').focus(); } }); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshWorkspace({ quiet: true }); }); window.addEventListener('focus', () => refreshWorkspace({ quiet: true })); setInterval(() => { if (document.visibilityState === 'visible') refreshWorkspace({ quiet: true }); }, 60000);
-async function boot() { try { const data = await api('/api/session'); state.accounts = data.accounts || []; state.settingsAvailable = !!data.settingsAvailable; state.demo = !!data.demo; renderSettingsButton(); state.ready = true; $('demo').hidden = !state.demo; $('user').textContent = data.email || 'Your workspace'; $('hosted-controls').hidden = !data.hosted; $('compose').disabled = false; renderAccounts(); document.querySelector('.mail-workspace').classList.toggle('onboarding-open', !state.accounts.length); if (!state.accounts.length) renderOnboarding(); else if ($('reader').querySelector('.onboarding')) resetReader(); await refreshWorkspace(); } catch (e) { notice(e.message); $('sync-status').textContent = 'Workspace unavailable'; $('compose').disabled = true; const empty = el('div', 'list-empty'); empty.append(el('strong', '', 'Your local inbox is unavailable.'), el('span', '', 'Check that Project Inbox is still running on this Mac, then refresh this page.')); $('messages').replaceChildren(empty); } }
+async function boot() { try { const data = await api('/api/session'); state.accounts = data.accounts || []; state.settingsAvailable = !!data.settingsAvailable; state.demo = !!data.demo; renderSettingsButton(); state.ready = true; $('demo').hidden = !state.demo; $('user').textContent = data.email || 'Your workspace'; state.hosted = !!data.hosted; $('hosted-controls').hidden = !data.hosted; $('compose').disabled = false; renderAccounts(); document.querySelector('.mail-workspace').classList.toggle('onboarding-open', !state.accounts.length); if (!state.accounts.length) renderOnboarding(); else if ($('reader').querySelector('.onboarding')) resetReader(); await refreshWorkspace(); } catch (e) { notice(e.message); $('sync-status').textContent = 'Workspace unavailable'; $('compose').disabled = true; const empty = el('div', 'list-empty'); empty.append(el('strong', '', 'Your local inbox is unavailable.'), el('span', '', 'Check that Project Inbox is still running on this Mac, then refresh this page.')); $('messages').replaceChildren(empty); } }
 
 let syncPromise = null;
 let lastSync = 0;
@@ -72,8 +73,8 @@ function renderOnboarding() {
   const welcome = el('div', 'onboarding');
   welcome.append(el('span', 'onboarding-mark', '✉'), el('p', 'eyebrow', 'LET’S MAKE YOURSELF AT HOME'), el('h2', '', 'Your projects. One inbox.'), el('p', 'onboarding-intro', 'Connect your first Resend account to start reading and replying to project mail here.'));
   const steps = el('div', 'onboarding-steps');
-  [['1', 'Choose your project', 'Give the inbox a name and the email address you send from.'], ['2', 'Connect Resend', 'Add a full-access API key. It stays encrypted on this Mac.'], ['3', 'Settle into your inbox', 'Your connected accounts stay ready on this Mac for your next visit.']].forEach(([number, heading, copy]) => { const row = el('div', 'onboarding-step'); const text = el('div'); text.append(el('strong', '', heading), el('p', '', copy)); row.append(el('span', 'step-number', number), text); steps.append(row); });
-  welcome.append(steps, action('Connect your first project →', () => showSettings(), 'primary'), el('p', 'onboarding-footnote', 'Runs on your Mac. No login, cloud account, or personal inbox access needed.'));
+  [['1', 'Choose your project', 'Give the inbox a name and the email address you send from.'], ['2', 'Connect Resend', L('Add a full-access API key. It stays encrypted on this Mac.')], ['3', 'Settle into your inbox', L('Your connected accounts stay ready on this Mac for your next visit.')]].forEach(([number, heading, copy]) => { const row = el('div', 'onboarding-step'); const text = el('div'); text.append(el('strong', '', heading), el('p', '', copy)); row.append(el('span', 'step-number', number), text); steps.append(row); });
+  welcome.append(steps, action('Connect your first project →', () => showSettings(), 'primary'), el('p', 'onboarding-footnote', L('Runs on your Mac. No login, cloud account, or personal inbox access needed.')));
   $('reader').append(welcome); document.querySelector('.mail-workspace').classList.add('onboarding-open');
 }
 
@@ -101,7 +102,7 @@ function showSettings() {
   const key = field('API key', 'password', 're_…');
   fields.append(el('p', 'login-copy', 'Project IDs keep accounts separate. Incoming mail must also be enabled for this address in Resend. Leave the API key blank when editing to keep the saved key.'));
   const error = el('p', 'send-error'); error.setAttribute('role', 'alert');
-  const footer = el('footer', 'modal-footer'); const help = el('span', '', state.demo ? 'Demo cannot save credentials.' : 'Your API keys stay encrypted on this Mac.'); const save = el('button', 'primary', 'Save project'); save.type = 'submit'; save.disabled = state.demo; footer.append(help, save);
+  const footer = el('footer', 'modal-footer'); const help = el('span', '', state.demo ? 'Demo cannot save credentials.' : L('Your API keys stay encrypted on this Mac.')); const save = el('button', 'primary', 'Save project'); save.type = 'submit'; save.disabled = state.demo; footer.append(help, save);
   picker.onchange = () => { const account = state.accounts.find(a => a.id === picker.value); id.value = account?.id || ''; id.readOnly = !!account; name.value = account?.name || ''; mailbox.value = account?.mailbox || ''; key.value = ''; key.required = !account; error.textContent = ''; };
   settingsDialog.addEventListener('close', () => { key.value = ''; });
   form.onsubmit = async event => {
@@ -178,7 +179,7 @@ async function showFeedback() {
   title.append(el('p', 'eyebrow', 'HELP SHAPE PROJECT INBOX'), el('h2', '', 'What should we improve?'));
   const close = action('×', () => feedbackDialog.close(), 'icon-button'); close.setAttribute('aria-label', 'Close feedback'); header.append(title, close);
   const content = el('div', 'feedback-content');
-  content.append(el('p', 'login-copy', 'Save an idea or issue for later. Feedback stays on this Mac and is not sent anywhere. No email content is collected automatically.'));
+  content.append(el('p', 'login-copy', L('Save an idea or issue for later. Feedback stays on this Mac and is not sent anywhere. No email content is collected automatically.')));
   const label = el('label', 'sr-only', 'Feedback'); const textarea = el('textarea'); textarea.id = 'feedback-message'; label.htmlFor = textarea.id; textarea.required = true; textarea.maxLength = 10000; textarea.placeholder = 'An issue you noticed, a feature you need, or a small detail we could improve…';
   const error = el('p', 'send-error'); error.setAttribute('role', 'alert');
   const history = el('details', 'feedback-history'); const summary = el('summary', '', 'Saved feedback'); const entries = el('div', 'feedback-entries'); history.append(summary, entries);
@@ -192,7 +193,7 @@ async function showFeedback() {
   form.onsubmit = async event => {
     event.preventDefault(); if (!textarea.value.trim()) { error.textContent = 'Write a little feedback before saving.'; textarea.focus(); return; }
     save.disabled = true; save.textContent = 'Saving…'; error.textContent = '';
-    try { await api('/api/feedback', { method: 'POST', body: JSON.stringify({ message: textarea.value.trim() }) }); textarea.value = ''; status.textContent = 'Feedback saved on this Mac.'; history.open = true; await loadHistory(); }
+    try { await api('/api/feedback', { method: 'POST', body: JSON.stringify({ message: textarea.value.trim() }) }); textarea.value = ''; status.textContent = L('Feedback saved on this Mac.'); history.open = true; await loadHistory(); }
     catch (e) { error.textContent = e.message; }
     finally { save.disabled = false; save.textContent = 'Save feedback'; }
   };
