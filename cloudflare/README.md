@@ -47,10 +47,18 @@ For Claude Desktop or Codex, add the same two values as `env` for the `project-i
 
 ## Move your existing local data
 
-Resend keys are not exported. Add them again in the hosted Settings. Mail itself syncs from Resend.
+Mail itself syncs from Resend. To keep your saved Resend accounts without retyping the keys, copy the encrypted rows and give the Worker the same encryption key as your local app. Run this yourself, because it moves your keys:
 
 ```sh
-node cloudflare/export-for-d1.mjs > project-inbox-export.sql      # tasks, schedules, drafts, feedback
+cat ~/.project-inbox/credentials.key | tr -d '\n' | npx wrangler secret put CREDENTIALS_KEY -c cloudflare/wrangler.jsonc
+node cloudflare/export-for-d1.mjs --accounts > project-inbox-export.sql
+```
+
+The encryption key is the only thing that protects those keys, so keep a backup of it. Or skip `--accounts` and add the accounts again in the hosted Settings.
+
+
+```sh
+node cloudflare/export-for-d1.mjs > project-inbox-export.sql      # tasks, schedules, drafts, feedback (+ accounts)
 npx wrangler d1 execute project-inbox --remote -c cloudflare/wrangler.jsonc --file project-inbox-export.sql
 ```
 
