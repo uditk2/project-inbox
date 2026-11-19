@@ -3,6 +3,7 @@ import { syncAccount } from './sync.js';
 import { drafts } from './drafts.js';
 import { tasks } from './tasks.js';
 import { schedules } from './schedules.js';
+import { authRoutes, authenticate, hosted, signInPage, tokens } from './auth.js';
 import { localRequest, HttpError, json, normalizeReceived, normalizeSent, publicAccount, resend, loadAccounts, encryptCredentials, validEmail } from './core.js';
 
 const messageColumns = 'id,account_id,direction,sender,recipients,subject,substr(body_text,1,180) AS preview,received_at,is_read,archived,trashed,status';
@@ -10,12 +11,13 @@ const messageColumns = 'id,account_id,direction,sender,recipients,subject,substr
 async function api(request, env, user) {
   const url = new URL(request.url);
   const configured = await loadAccounts(env);
-  if (url.pathname === '/api/session' && request.method === 'GET') return json({ email: user.email, demo: user.demo, accounts: configured.map(publicAccount), settingsAvailable:true });
+  if (url.pathname === '/api/session' && request.method === 'GET') return json({ email: user.email, demo: user.demo, accounts: configured.map(publicAccount), settingsAvailable:true, hosted:Boolean(user.via) });
   if (!env.DB) throw new HttpError(503, 'Database is not configured');
   if (url.pathname === '/api/drafts' || url.pathname.startsWith('/api/drafts/')) {
     const response = await drafts(request,env,configured,user);
     if (response) return response;
   }
+  if (url.pathname === '/api/tokens' || url.pathname.startsWith('/api/tokens/')) return tokens(request,env,user);
   if (url.pathname === '/api/tasks' || url.pathname.startsWith('/api/tasks/')) return tasks(request,env,user);
   if (url.pathname.startsWith('/api/schedules')) { const response = await schedules(request,env,user); if (response) return response; }
   if (url.pathname === '/api/feedback' && request.method === 'POST') {
@@ -115,25 +117,36 @@ async function api(request, env, user) {
   throw new HttpError(404, 'Not found');
 }
 
+const secured = (response, isHosted) => {
+  const headers = new Headers(response.headers);
+  headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self' about:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
+  headers.set('X-Content-Type-Options','nosniff');
+  headers.set('Referrer-Policy','no-referrer');
+  if (isHosted) headers.set('Strict-Transport-Security','max-age=31536000');
+  return new Response(response.body,{status:response.status,headers});
+};
+
 export default {
   async fetch(request, env) {
     try {
       const url = new URL(request.url);
       if (url.pathname === '/health') return json({ status: 'ok', app: 'project-inbox' });
-      const user = localRequest(request,env);
+      // Hosted on Cloudflare (AUTH_MODE=google): Google sign-in for people, API tokens for agents.
+      // Anything else is the local app, which only answers on this computer.
+      const remote = hosted(env);
+      if (remote) { const auth = await authRoutes(request,env); if (auth) return secured(auth,true); }
+      const user = remote ? await authenticate(request,env) : localRequest(request,env);
+      if (!user) return url.pathname.startsWith('/api/') ? json({error:'Sign in required'},401) : secured(signInPage(),true);
       if (url.pathname.startsWith('/api/')) {
         if (!['GET','HEAD'].includes(request.method)) {
-          if (request.headers.get('Origin') !== url.origin || !request.headers.get('Content-Type')?.startsWith('application/json')) throw new HttpError(403,'Same-origin JSON request required');
+          // Tokens are not sent by browsers on their own, so only cookie and local requests need the same-origin check.
+          if (user.via !== 'token' && request.headers.get('Origin') !== url.origin) throw new HttpError(403,'Same-origin JSON request required');
+          if (!request.headers.get('Content-Type')?.startsWith('application/json')) throw new HttpError(403,'Same-origin JSON request required');
           if (Number(request.headers.get('Content-Length') || 0) > 1000000) throw new HttpError(413,'Request too large');
         }
         return await api(request,env,user);
       }
-      const response = await env.ASSETS.fetch(request);
-      const headers = new Headers(response.headers);
-      headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self' about:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
-      headers.set('X-Content-Type-Options','nosniff');
-      headers.set('Referrer-Policy','no-referrer');
-      return new Response(response.body,{status:response.status,headers});
+      return secured(await env.ASSETS.fetch(request),remote);
     } catch (e) {
       if (e instanceof SyntaxError) return json({error:'Invalid JSON configuration or request'},400);
       return json({error:e instanceof HttpError ? e.message : 'Request could not be completed. Check server configuration.'},e instanceof HttpError ? e.status : 500);

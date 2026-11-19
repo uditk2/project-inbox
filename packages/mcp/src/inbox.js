@@ -13,6 +13,16 @@ export function localOrigin(value = 'http://127.0.0.1:8787') {
   return url.origin;
 }
 
+// A hosted Project Inbox (Cloudflare Worker): https only, reached with an API token created on its Agent access page.
+export function remoteOrigin(value) {
+  const url = new URL(value);
+  if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('PROJECT_INBOX_URL must be an https origin with no path, such as https://project-inbox.example.workers.dev');
+  }
+  return url.origin;
+}
+const loopback = value => { try { return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(value).hostname); } catch { return false; } };
+
 // The running app records its address here so the MCP can find it when it was started on a non-default port.
 export function discoveredUrl(dataDir = process.env.DATA_DIR || join(homedir(), '.project-inbox')) {
   try {
@@ -22,10 +32,12 @@ export function discoveredUrl(dataDir = process.env.DATA_DIR || join(homedir(), 
   } catch { return null; }
 }
 
-// Order: PROJECT_INBOX_URL, then the running app's address, then the default port 8787.
+// Order: PROJECT_INBOX_URL (loopback http, or https with PROJECT_INBOX_TOKEN), then the running app's address, then the default port 8787.
 export class InboxClient {
-  constructor(value, request = fetch, discover = discoveredUrl) {
-    this.configured = value ? localOrigin(value) : null;
+  constructor(value, request = fetch, discover = discoveredUrl, token = process.env.PROJECT_INBOX_TOKEN) {
+    this.remote = Boolean(value) && !loopback(value);
+    this.token = token || null;
+    this.configured = value ? (this.remote ? remoteOrigin(value) : localOrigin(value)) : null;
     this.discover = discover;
     this.request = request;
   }
@@ -34,14 +46,16 @@ export class InboxClient {
   async api(path, body, method = body ? 'POST' : 'GET') {
     let response;
     const origin = this.origin;
+    if (this.remote && !this.token) throw new Error('Set PROJECT_INBOX_TOKEN to a token from the hosted Project Inbox Agent access page.');
     try {
       response = await this.request(`${origin}${path}`, {
         method, redirect: 'error', signal: AbortSignal.timeout(60000),
-        headers: { Accept: 'application/json', ...(body ? { Origin: origin, 'Content-Type': 'application/json' } : {}) },
+        headers: { Accept: 'application/json', ...(this.remote ? { Authorization: `Bearer ${this.token}` } : {}), ...(body ? { Origin: origin, 'Content-Type': 'application/json' } : {}) },
         ...(body ? { body: JSON.stringify(body) } : {})
       });
     } catch { throw new Error('Cannot connect to Project Inbox. Start Project Inbox (default port 8787), or set PROJECT_INBOX_URL.'); }
-    if (!response.ok) throw new Error(`Project Inbox request failed (${response.status}). Check the local app.`);
+    if (response.status === 401 && this.remote) throw new Error('The hosted Project Inbox rejected this token. Create a new one on its Agent access page.');
+    if (!response.ok) throw new Error(`Project Inbox request failed (${response.status}). Check the ${this.remote ? 'hosted' : 'local'} app.`);
     return response.json();
   }
 

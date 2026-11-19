@@ -7,9 +7,11 @@ const MAX_BATCH = 100;
 
 async function scan(request, env, user) {
   denyDemo(user, 'read local schedules');
+  if (env.LOCAL_APP !== 'true') throw new HttpError(501, 'Importing Codex schedules works only in the local app. Agents can save schedules with sync_schedules.');
   const sources = (await request.json())?.sources;
   if (!Array.isArray(sources) || !sources.length || sources.some(s => s !== 'codex')) throw new HttpError(400, 'Choose a supported source: codex');
-  const {scanCodex} = await import('./scan.js');   // Node-only code, loaded only when the user asks for an import
+  const scanModule = './scan.js';   // a variable keeps the Cloudflare bundler from pulling Node-only code into the Worker
+  const {scanCodex} = await import(scanModule);   // Node-only code, loaded only when the user asks for an import
   const result = await scanCodex(env.CODEX_HOME || undefined);
   const found = result.schedules.slice(0, MAX_BATCH);
   if (found.length) await saveSchedules(env.DB, found);

@@ -2,7 +2,7 @@
 
 A lightweight, open source email client for multiple Resend accounts. One local browser app for reading, writing, and replying to mail across your projects.
 
-No hosted account, Google sign-in, Docker, or public webhook endpoint. Your computer connects to Resend when you open the app. This is an early release being tested with real project email.
+Two ways to run it: **locally** with one `npx` command (no hosted account, sign-in, Docker, or public webhook), or **on Cloudflare** with Google login. Both use the same app. This is an early release being tested with real project email.
 
 ## Run locally
 
@@ -35,6 +35,18 @@ npx --yes project-inbox setup
 It looks for Claude Code, Codex and Claude Desktop on your computer, asks before adding Project Inbox to each one, and then starts the app as usual. If Project Inbox is already running on that port, it says so and reuses it instead of failing. Choose specific tools with `--for`, for example `--for codex` or `--for claude` (Claude Code and Claude Desktop), or add `--yes` to skip the questions. Tools that already have it are left alone, and Claude Desktop's config is backed up first. Restart a tool after it is added.
 
 Day to day, start the app with `npx --yes project-inbox` and keep it running, since the MCP server talks to it. The MCP finds the app by itself on the default port 8787, or on any port you chose with `--port`. To set it up by hand, see the [MCP README](packages/mcp/README.md).
+
+## Run on Cloudflare (optional)
+
+Host the same app on a Cloudflare Worker with a D1 database and Google login, so nothing has to run on your computer. The MCP can point at it with a token.
+
+```sh
+npm install && npx wrangler login
+npx wrangler d1 create project-inbox   # put the id in wrangler.jsonc, set ALLOWED_EMAILS
+npm run cf:migrate && npm run cf:deploy
+```
+
+Then add the Google client and secrets. Full steps, MCP setup and moving your local data are in [docs/cloudflare.md](docs/cloudflare.md). The local app stays as described below.
 
 ## Task calendar
 
@@ -77,7 +89,7 @@ By default, private data lives in `~/.project-inbox/`:
 
 API keys are encrypted using AES-GCM and are never returned to browser settings. They are decrypted in the local Node process only when needed for provider requests. The encryption key is stored on the same computer, so this protects a copied database without its key; it does not protect against someone who controls your computer. Cached email content itself is not encrypted by the app. Use your operating system's disk encryption for that.
 
-The listener binds to `127.0.0.1`, checks the request host, and requires same-origin JSON for changes. There is deliberately no sign-in screen. Do not expose or reverse-proxy this local app onto a public network.
+The local listener binds to `127.0.0.1`, checks the request host, and requires same-origin JSON for changes. There is deliberately no sign-in screen, so do not expose or reverse-proxy the local app. To use it from anywhere, run the Cloudflare version, which has Google login.
 
 Mail HTML opens in an isolated frame with scripts, forms, and remote content blocked. No analytics or third-party UI assets are loaded.
 
@@ -109,7 +121,7 @@ npm run check
 npm run dev
 ```
 
-Modules separate HTTP routing (`src/app.js`), provider access and credential handling (`src/core.js`), incremental sync (`src/sync.js`), sending (`src/send.js`), HTML sanitization (`src/format.js`), storage (`src/sqlite.js`), and the local launcher (`bin/cli.js`). The browser client has no frontend framework or build step.
+Modules separate HTTP routing (`src/app.js`), provider access and credential handling (`src/core.js`), incremental sync (`src/sync.js`), sending (`src/send.js`), HTML sanitization (`src/format.js`), storage (`src/sqlite.js`), the local launcher (`bin/cli.js`), and hosted sign-in (`src/auth.js`). The browser client has no frontend framework or build step.
 
 GitHub Actions checks Windows, macOS, and Linux. The publishing workflow runs on a published release or manual dispatch and uses npm trusted publishing. See [release instructions](docs/releasing.md).
 

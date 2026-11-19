@@ -1,0 +1,7 @@
+# Copy to .dev.vars for `npm run cf:dev`. Never commit .dev.vars.
+AUTH_MODE=google
+ALLOWED_EMAILS=you@example.com
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+SESSION_SECRET=at-least-32-random-characters
+CREDENTIALS_KEY=at-least-32-different-random-characters

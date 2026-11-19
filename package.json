@@ -34,7 +34,10 @@
     "demo": "node bin/cli.js --demo",
     "test": "node --test",
     "check": "node scripts/check.mjs",
-    "build": "npm pack --dry-run"
+    "build": "npm pack --dry-run",
+    "cf:dev": "wrangler dev",
+    "cf:migrate": "wrangler d1 migrations apply project-inbox --remote",
+    "cf:deploy": "wrangler deploy"
   },
   "dependencies": {
     "sanitize-html": "^2.18.1"
@@ -46,5 +49,8 @@
   "homepage": "https://github.com/uditk2/project-inbox#readme",
   "bugs": {
     "url": "https://github.com/uditk2/project-inbox/issues"
+  },
+  "devDependencies": {
+    "wrangler": "^4.165.0"
   }
 }

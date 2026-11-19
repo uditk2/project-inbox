@@ -56,3 +56,25 @@ test('discovery ignores stale, foreign and malformed files', async () => {
   write('not json');
   assert.equal(discoveredUrl(dir), null);
 });
+
+test('a hosted https inbox needs a token, which is sent as a bearer header', async () => {
+  assert.throws(() => new InboxClient('http://example.com', fetch, () => null, 't'), /loopback|https/);
+  assert.throws(() => new InboxClient('https://inbox.example.com/path', fetch, () => null, 't'), /https origin/);
+  await assert.rejects(new InboxClient('https://inbox.example.com', async () => { throw new Error('must not call'); }, () => null).accounts(), /PROJECT_INBOX_TOKEN/);
+  const client = new InboxClient('https://inbox.example.com', async (url, options) => {
+    assert.equal(url, 'https://inbox.example.com/api/session');
+    assert.equal(options.headers.Authorization, 'Bearer pi_secret');
+    return Response.json({accounts:[],demo:false});
+  }, () => null, 'pi_secret');
+  assert.deepEqual(await client.accounts(), {accounts:[],demo:false});
+  const rejected = new InboxClient('https://inbox.example.com', async () => new Response('{}', {status:401}), () => null, 'pi_old');
+  await assert.rejects(rejected.accounts(), /rejected this token/);
+});
+
+test('local clients never send a token', async () => {
+  const client = new InboxClient('http://127.0.0.1:8799', async (_, options) => {
+    assert.equal(options.headers.Authorization, undefined);
+    return Response.json({accounts:[],demo:false});
+  }, () => null, 'pi_unused');
+  await client.accounts();
+});

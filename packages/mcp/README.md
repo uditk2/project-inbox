@@ -50,3 +50,7 @@ Sending reaches external recipients. Only authorize it in a trusted host, and re
 Only loopback HTTP origins are accepted, and redirects are rejected. Logs must stay on stderr because stdout is reserved for MCP protocol messages.
 
 MIT licensed. [Report an issue](https://github.com/uditk2/project-inbox/issues/new).
+
+## Hosted Project Inbox (Cloudflare)
+
+To use a Project Inbox hosted on Cloudflare, set `PROJECT_INBOX_URL` to its https address and `PROJECT_INBOX_TOKEN` to a token from its **Agent access** page. Without these the MCP uses your local app. See [docs/cloudflare.md](../../docs/cloudflare.md).
