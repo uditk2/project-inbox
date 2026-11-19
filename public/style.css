@@ -66,3 +66,10 @@
 .cal-event{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:3px 0;font-size:12px}
 .cal-event-time{color:#7a8595;min-width:110px}
 .cal-event-note{color:#5d6a7f}
+
+/* Read mail is greyed slightly, like Gmail and Outlook; unread stays white and bold. */
+.message:not(.unread){background:#f5f6fa}
+.message:not(.unread):hover{background:#eef0f6}
+.message:not(.unread) .sender,.message:not(.unread) .subject{color:#667086;font-weight:400}
+.message:not(.unread) .preview{color:#a3abb9}
+.message.selected:not(.unread){background:#f0f4ff}
