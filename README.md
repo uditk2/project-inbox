@@ -42,11 +42,11 @@ Host the same app on a Cloudflare Worker with a D1 database and Google login, so
 
 ```sh
 npm install && npx wrangler login
-npx wrangler d1 create project-inbox   # put the id in wrangler.jsonc, set ALLOWED_EMAILS
+npx wrangler d1 create project-inbox   # put the id in cloudflare/wrangler.jsonc, set ALLOWED_EMAILS
 npm run cf:migrate && npm run cf:deploy
 ```
 
-Then add the Google client and secrets. Full steps, MCP setup and moving your local data are in [docs/cloudflare.md](docs/cloudflare.md). The local app stays as described below.
+Then add the Google client and secrets. Full steps, MCP setup and moving your local data are in [cloudflare/README.md](cloudflare/README.md). The local app stays as described below.
 
 ## Task calendar
 

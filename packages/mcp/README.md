@@ -53,4 +53,4 @@ MIT licensed. [Report an issue](https://github.com/uditk2/project-inbox/issues/n
 
 ## Hosted Project Inbox (Cloudflare)
 
-To use a Project Inbox hosted on Cloudflare, set `PROJECT_INBOX_URL` to its https address and `PROJECT_INBOX_TOKEN` to a token from its **Agent access** page. Without these the MCP uses your local app. See [docs/cloudflare.md](../../docs/cloudflare.md).
+To use a Project Inbox hosted on Cloudflare, set `PROJECT_INBOX_URL` to its https address and `PROJECT_INBOX_TOKEN` to a token from its **Agent access** page. Without these the MCP uses your local app. See [cloudflare/README.md](../../cloudflare/README.md).

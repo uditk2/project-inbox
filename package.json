@@ -35,9 +35,9 @@
     "test": "node --test",
     "check": "node scripts/check.mjs",
     "build": "npm pack --dry-run",
-    "cf:dev": "wrangler dev",
-    "cf:migrate": "wrangler d1 migrations apply project-inbox --remote",
-    "cf:deploy": "wrangler deploy"
+    "cf:dev": "wrangler dev -c cloudflare/wrangler.jsonc",
+    "cf:migrate": "wrangler d1 migrations apply project-inbox --remote -c cloudflare/wrangler.jsonc",
+    "cf:deploy": "wrangler deploy -c cloudflare/wrangler.jsonc"
   },
   "dependencies": {
     "sanitize-html": "^2.18.1"

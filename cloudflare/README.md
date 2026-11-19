@@ -1,21 +1,21 @@
 # Run Project Inbox on Cloudflare
 
-The same app, hosted on a Cloudflare Worker with a D1 database. People sign in with Google. Agents use API tokens. The local `npx project-inbox` app is unchanged and does not need any of this.
+The same app, hosted on a Cloudflare Worker with a D1 database. People sign in with Google. Agents use API tokens. Everything specific to Cloudflare lives in this folder, plus `src/auth.js`. The local `npx project-inbox` app is unchanged, still the default, and does not need any of this.
 
 ## Set up
 
 ```sh
 npm install
 npx wrangler login
-npx wrangler d1 create project-inbox      # copy database_id into wrangler.jsonc
+npx wrangler d1 create project-inbox      # copy database_id into cloudflare/wrangler.jsonc
 ```
 
-In `wrangler.jsonc`, set `ALLOWED_EMAILS` to the Google addresses allowed in (comma separated). Then:
+In `cloudflare/wrangler.jsonc`, set `ALLOWED_EMAILS` to the Google addresses allowed in (comma separated). Then:
 
 ```sh
 npm run cf:migrate                        # creates the tables in D1
-npx wrangler secret put SESSION_SECRET    # openssl rand -base64 48
-npx wrangler secret put CREDENTIALS_KEY   # a different openssl rand -base64 48
+npx wrangler secret put SESSION_SECRET -c cloudflare/wrangler.jsonc   # openssl rand -base64 48
+npx wrangler secret put CREDENTIALS_KEY -c cloudflare/wrangler.jsonc  # a different openssl rand -base64 48
 npm run cf:deploy                         # prints https://project-inbox.<you>.workers.dev
 ```
 
@@ -28,8 +28,8 @@ Keep `CREDENTIALS_KEY`. It encrypts the Resend keys stored in D1, and changing i
 3. Save the client, then:
 
 ```sh
-npx wrangler secret put GOOGLE_CLIENT_ID
-npx wrangler secret put GOOGLE_CLIENT_SECRET
+npx wrangler secret put GOOGLE_CLIENT_ID -c cloudflare/wrangler.jsonc
+npx wrangler secret put GOOGLE_CLIENT_SECRET -c cloudflare/wrangler.jsonc
 ```
 
 Open the Worker URL, sign in, and add your Resend accounts in Settings. Only addresses in `ALLOWED_EMAILS` get in. If it is empty or a secret is missing, nobody does.
@@ -49,8 +49,8 @@ For Claude Desktop or Codex, add the same two values as `env` for the `project-i
 Resend keys are not exported. Add them again in the hosted Settings. Mail itself syncs from Resend.
 
 ```sh
-node scripts/export-for-d1.mjs > project-inbox-export.sql      # tasks, schedules, drafts, feedback
-npx wrangler d1 execute project-inbox --remote --file project-inbox-export.sql
+node cloudflare/export-for-d1.mjs > project-inbox-export.sql      # tasks, schedules, drafts, feedback
+npx wrangler d1 execute project-inbox --remote -c cloudflare/wrangler.jsonc --file project-inbox-export.sql
 ```
 
 Add `--messages` to also copy cached mail with its read, archive and trash state. Large mailboxes can exceed D1 import limits.
@@ -58,8 +58,8 @@ Add `--messages` to also copy cached mail with its read, archive and trash state
 ## Develop locally
 
 ```sh
-cp .dev.vars.example .dev.vars            # fill in values
-npx wrangler d1 migrations apply project-inbox --local
+cp cloudflare/.dev.vars.example cloudflare/.dev.vars   # fill in values
+npx wrangler d1 migrations apply project-inbox --local -c cloudflare/wrangler.jsonc
 npm run cf:dev
 ```
 

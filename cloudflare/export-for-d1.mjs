@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Writes your local task calendar (and optionally mail state) as SQL you can load into the Cloudflare D1 database.
 // Never exports Resend keys or the encryption key: add accounts again in the hosted app's Settings.
-//   node scripts/export-for-d1.mjs [--messages] [--db ~/.project-inbox/inbox.sqlite] > project-inbox-export.sql
+//   node cloudflare/export-for-d1.mjs [--messages] [--db ~/.project-inbox/inbox.sqlite] > project-inbox-export.sql
 //   npx wrangler d1 execute project-inbox --remote --file project-inbox-export.sql
 import { DatabaseSync } from 'node:sqlite';
 import { homedir } from 'node:os';
