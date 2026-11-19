@@ -25,6 +25,18 @@ npm run cf:deploy                         # prints https://project-inbox.<you>.w
 
 Keep `CREDENTIALS_KEY`. It encrypts the Resend keys stored in D1, and changing it makes them unreadable.
 
+## Settings and secrets
+
+`cloudflare/.dev.vars.example` lists every setting. For local development, copy it to `cloudflare/.dev.vars` (git ignores it). In production each secret is set once with `wrangler secret put`, and nothing sensitive goes in a file.
+
+| Name | What it is | Where to get it |
+| --- | --- | --- |
+| `AUTH_MODE` | Set to `google` to turn on login. Already in the sample config. | Leave as is |
+| `ALLOWED_EMAILS` | Google addresses allowed in, comma separated. Empty means nobody. | Your own address |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | The Google OAuth client | Google Cloud Console, see Google login below |
+| `SESSION_SECRET` | Signs login cookies | `openssl rand -base64 48` |
+| `CREDENTIALS_KEY` | Encrypts the Resend keys in the database | A different `openssl rand -base64 48`. Keep a backup |
+
 ## Google login
 
 1. Google Cloud Console, **APIs & Services > Credentials > Create credentials > OAuth client ID**, type **Web application**.
@@ -70,7 +82,7 @@ Add `--messages` to also copy cached mail with its read, archive and trash state
 ## Develop locally
 
 ```sh
-cp cloudflare/.dev.vars.example cloudflare/.dev.vars   # fill in values
+cp cloudflare/.dev.vars.example cloudflare/.dev.vars   # fill in values, see Settings and secrets
 npx wrangler d1 migrations apply project-inbox --local -c cloudflare/wrangler.jsonc
 npm run cf:dev
 ```

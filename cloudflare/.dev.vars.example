@@ -1,7 +1,24 @@
-# Copy to .dev.vars for `npm run cf:dev`. Never commit .dev.vars.
+# Sample settings for the Cloudflare version. Do not put real values in this file.
+#
+# Local development: copy to cloudflare/.dev.vars (git ignores it) and fill it in, then `npm run cf:dev`.
+# Production: set each secret once with `npx wrangler secret put NAME -c cloudflare/wrangler.jsonc`.
+# AUTH_MODE is not a secret. It is already set in wrangler.example.jsonc.
+
+# Turns on Google login. Leave as is.
 AUTH_MODE=google
+
+# Google accounts allowed to sign in, comma separated. Nobody gets in if this is empty.
 ALLOWED_EMAILS=you@example.com
+
+# From Google Cloud Console > APIs & Services > Credentials > OAuth client ID (Web application).
+# Authorized redirect URI: https://<your-worker-url>/auth/callback (local: http://127.0.0.1:8787/auth/callback)
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-SESSION_SECRET=at-least-32-random-characters
-CREDENTIALS_KEY=at-least-32-different-random-characters
+
+# Signs login cookies. 32+ random characters: openssl rand -base64 48
+SESSION_SECRET=
+
+# Encrypts the Resend API keys stored in the database. 32+ random characters, a different value:
+# openssl rand -base64 48. Keep a backup. Changing it makes saved Resend keys unreadable.
+# To reuse accounts from the local app, use the contents of ~/.project-inbox/credentials.key.
+CREDENTIALS_KEY=
