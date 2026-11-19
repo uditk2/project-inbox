@@ -10,3 +10,6 @@ dist/
 *.log
 .DS_Store
 coverage/
+
+# Your own Cloudflare settings (copied from cloudflare/wrangler.example.jsonc)
+cloudflare/wrangler.jsonc

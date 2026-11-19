@@ -7,10 +7,13 @@ The same app, hosted on a Cloudflare Worker with a D1 database. People sign in w
 ```sh
 npm install
 npx wrangler login
-npx wrangler d1 create project-inbox      # copy database_id into cloudflare/wrangler.jsonc
+cp cloudflare/wrangler.example.jsonc cloudflare/wrangler.jsonc   # your own copy, ignored by git
+npx wrangler d1 create project-inbox
 ```
 
-Then set the secrets. `ALLOWED_EMAILS` is the Google addresses allowed in (comma separated). It lives in Cloudflare, not in the repo:
+`d1 create` prints a `database_id`. Paste it into `cloudflare/wrangler.jsonc` in place of `REPLACE_WITH_YOUR_DATABASE_ID`. If you lose it, run `npx wrangler d1 list`, or open the Cloudflare dashboard, Storage & Databases, D1, and pick the database. The id is not a secret, but your copy of the config stays out of git so the sample in the repo remains a clean template.
+
+Then apply the tables and set the secrets. `ALLOWED_EMAILS` is the Google addresses allowed in (comma separated). It lives in Cloudflare, not in the repo:
 
 ```sh
 npm run cf:migrate                        # creates the tables in D1
