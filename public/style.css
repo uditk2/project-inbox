@@ -66,5 +66,3 @@
 .cal-event{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:3px 0;font-size:12px}
 .cal-event-time{color:#7a8595;min-width:110px}
 .cal-event-note{color:#5d6a7f}
-
-.unread-dot{cursor:pointer;position:relative}.unread-dot::after{content:"";position:absolute;inset:-8px}
