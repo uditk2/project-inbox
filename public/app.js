@@ -201,3 +201,4 @@ async function showFeedback() {
 }
 $('feedback').onclick = () => showFeedback();
 boot();
+$('sign-out')?.addEventListener('click', async () => { await fetch('/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', redirect: 'manual' }).catch(() => {}); location.assign('/'); });

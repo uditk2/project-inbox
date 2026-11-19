@@ -118,3 +118,12 @@ test('an unconfigured Worker fails closed', async () => {
   assert.equal(noSecret.status, 503);
   assert.equal((await worker.fetch(get('/'), { AUTH_MODE: 'other' })).status, 403);
 });
+
+test('sign out clears the session cookie and needs a same-origin request', async () => {
+  const e = env(); const cookie = await sessionCookie(e);
+  assert.equal((await worker.fetch(send('/auth/logout', 'POST', {}, { Cookie: cookie, Origin: 'https://evil.example' }), e)).status, 403);
+  assert.equal((await worker.fetch(send('/auth/logout', 'POST', {}, { Cookie: cookie, Origin: 'null' }), e)).status, 403);
+  const response = await worker.fetch(send('/auth/logout', 'POST', {}, { Cookie: cookie, Origin: BASE }), e);
+  assert.equal(response.status, 303);
+  assert.match(response.headers.get('Set-Cookie'), /^__Host-pi_session=; .*Max-Age=0/);
+});
