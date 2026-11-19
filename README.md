@@ -42,7 +42,7 @@ Host the same app on a Cloudflare Worker with a D1 database and Google login, so
 
 ```sh
 npm install && npx wrangler login
-npx wrangler d1 create project-inbox   # put the id in cloudflare/wrangler.jsonc, set ALLOWED_EMAILS
+npx wrangler d1 create project-inbox   # put the id in cloudflare/wrangler.jsonc
 npm run cf:migrate && npm run cf:deploy
 ```
 

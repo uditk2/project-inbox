@@ -50,7 +50,9 @@ test('callback sets a session for an allowed Google account and uses the PKCE ve
   assert.equal(calls[0].url, 'https://oauth2.googleapis.com/token');
   assert.ok(calls[0].body.get('code_verifier'));
   assert.equal(calls[0].body.get('client_secret'), 'client-secret');
-  const cookie = response.headers.getSetCookie().find(c => c.startsWith('__Host-pi_session=')).split(';')[0];
+  const setCookie = response.headers.getSetCookie().find(c => c.startsWith('__Host-pi_session='));
+  assert.match(setCookie, /Max-Age=604800/); // 7 days
+  const cookie = setCookie.split(';')[0];
   const session = await worker.fetch(get('/api/session', { Cookie: cookie }), e);
   assert.equal(session.status, 200);
   const body = await session.json();

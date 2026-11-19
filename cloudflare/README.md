@@ -10,10 +10,11 @@ npx wrangler login
 npx wrangler d1 create project-inbox      # copy database_id into cloudflare/wrangler.jsonc
 ```
 
-In `cloudflare/wrangler.jsonc`, set `ALLOWED_EMAILS` to the Google addresses allowed in (comma separated). Then:
+Then set the secrets. `ALLOWED_EMAILS` is the Google addresses allowed in (comma separated). It lives in Cloudflare, not in the repo:
 
 ```sh
 npm run cf:migrate                        # creates the tables in D1
+npx wrangler secret put ALLOWED_EMAILS -c cloudflare/wrangler.jsonc   # you@example.com
 npx wrangler secret put SESSION_SECRET -c cloudflare/wrangler.jsonc   # openssl rand -base64 48
 npx wrangler secret put CREDENTIALS_KEY -c cloudflare/wrangler.jsonc  # a different openssl rand -base64 48
 npm run cf:deploy                         # prints https://project-inbox.<you>.workers.dev
@@ -67,4 +68,4 @@ npm run cf:dev
 
 - Importing Codex schedules is local only. Agents can still save schedules with `sync_schedules`.
 - Mail cache, drafts and tasks live in D1 instead of `~/.project-inbox`.
-- Sessions last 14 days. Removing an address from `ALLOWED_EMAILS` ends its sessions immediately.
+- Sessions last 7 days. Removing an address from `ALLOWED_EMAILS` ends its sessions immediately.

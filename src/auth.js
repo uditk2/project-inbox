@@ -4,7 +4,7 @@
 import { HttpError, json, hash } from './core.js';
 
 const encoder = new TextEncoder();
-const SESSION_SECONDS = 14 * 24 * 3600;
+const SESSION_SECONDS = 7 * 24 * 3600;
 const FLOW_SECONDS = 600;
 const MAX_TOKENS = 20;
 const GOOGLE_AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
